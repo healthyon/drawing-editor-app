@@ -132,10 +132,11 @@
         const saveStatus = document.getElementById('saveStatus');
 
         // --- State Management ---
-        let shapes = [], selectedShape = null, currentTool = 'select';
-        let isDrawing = false, isDragging = false, isResizing = false, isPanning = false, isRotating = false, isShiftDown = false;
+        let shapes = [], selectedShapes = [], currentTool = 'select';
+        let isDrawing = false, isDragging = false, isResizing = false, isPanning = false, isRotating = false, isShiftDown = false, isMultiSelecting = false;
         let resizeHandle = null, startX, startY, endX, endY, lastPanPoint = { x: 0, y: 0 };
-        let dragStart = {};
+        let dragStart = { mouse: {}, shapes: [] };
+        let selectionBox = {};
         let showDimensions = true;
         let scale = 1.0, viewOffsetX = 0, viewOffsetY = 0;
         let currentStyle = { lineWidth: 1, strokeColor: '#000000', fillColor: '#E5E7EB' };
@@ -205,7 +206,7 @@
             if (!isAppReady || historyIndex <= 0) return;
             historyIndex--;
             shapes = JSON.parse(JSON.stringify(history[historyIndex]));
-            selectShape(null);
+            setSelectedShapes([]);
             draw();
             updateHistoryButtons();
             saveShapesToFirestore();
@@ -215,7 +216,7 @@
             if (!isAppReady || historyIndex >= history.length - 1) return;
             historyIndex++;
             shapes = JSON.parse(JSON.stringify(history[historyIndex]));
-            selectShape(null);
+            setSelectedShapes([]);
             draw();
             updateHistoryButtons();
             saveShapesToFirestore();
@@ -232,43 +233,55 @@
             Object.values(toolBtns).forEach(btn => btn.classList.remove('active'));
             if (toolBtns[tool]) toolBtns[tool].classList.add('active');
             canvas.style.cursor = tool === 'select' ? 'default' : 'crosshair';
-            selectShape(null); draw();
+            setSelectedShapes([]); 
+            draw();
         }
         
-        function selectShape(shape) {
-            selectedShape = shape;
-            inspector.classList.toggle('hidden', !shape);
+        function setSelectedShapes(newSelection) {
+            selectedShapes = newSelection;
             updateInspector();
         }
 
         function updateInspector() {
-            if (!selectedShape) { inspectorContent.innerHTML = `<p class="text-gray-500 text-sm">수정할 도형을 선택하세요.</p>`; return; }
-            let content = `<div class="space-y-4"><div><label class="text-sm font-medium">이름</label><input type="text" id="inspector-name" class="inspector-input" value="${selectedShape.name || ''}"></div>`;
-            switch(selectedShape.type) {
-                case 'rectangle':
-                    content += `<div><label class="text-sm font-medium">가로 (m)</label><input type="number" step="0.1" id="inspector-width" class="inspector-input" value="${(selectedShape.width / PIXELS_PER_METER).toFixed(2)}"></div>
-                               <div><label class="text-sm font-medium">세로 (m)</label><input type="number" step="0.1" id="inspector-height" class="inspector-input" value="${(selectedShape.height / PIXELS_PER_METER).toFixed(2)}"></div>
-                               <div><label class="text-sm font-medium">회전 (°)</label><input type="number" id="inspector-rotation" class="inspector-input" value="${((selectedShape.rotation || 0) * 180 / Math.PI).toFixed(1)}"></div>`;
-                    break;
-                case 'line':
-                    const length = Math.hypot(selectedShape.x2 - selectedShape.x1, selectedShape.y2 - selectedShape.y1);
-                    const angle = Math.atan2(selectedShape.y2 - selectedShape.y1, selectedShape.x2 - selectedShape.x1) * 180 / Math.PI;
-                    content += `<div><label class="text-sm font-medium">길이 (m)</label><input type="number" step="0.1" id="inspector-length" class="inspector-input" value="${(length / PIXELS_PER_METER).toFixed(2)}"></div>
-                               <div><label class="text-sm font-medium">회전 (°)</label><input type="number" id="inspector-rotation" class="inspector-input" value="${angle.toFixed(1)}"></div>`;
-                    break;
-                case 'circle':
-                     content += `<div><label class="text-sm font-medium">지름 (m)</label><input type="number" step="0.1" id="inspector-diameter" class="inspector-input" value="${(selectedShape.radius * 2 / PIXELS_PER_METER).toFixed(2)}"></div>`;
-                    break;
+            if (selectedShapes.length === 0) {
+                inspectorContent.innerHTML = `<p class="text-gray-500 text-sm">수정할 도형을 선택하세요.</p>`;
+                inspector.classList.add('hidden');
+            } else if (selectedShapes.length === 1) {
+                inspector.classList.remove('hidden');
+                const selectedShape = selectedShapes[0];
+                let content = `<div class="space-y-4"><div><label class="text-sm font-medium">이름</label><input type="text" id="inspector-name" class="inspector-input" value="${selectedShape.name || ''}"></div>`;
+                switch(selectedShape.type) {
+                    case 'rectangle':
+                        content += `<div><label class="text-sm font-medium">가로 (m)</label><input type="number" step="0.1" id="inspector-width" class="inspector-input" value="${(selectedShape.width / PIXELS_PER_METER).toFixed(2)}"></div>
+                                   <div><label class="text-sm font-medium">세로 (m)</label><input type="number" step="0.1" id="inspector-height" class="inspector-input" value="${(selectedShape.height / PIXELS_PER_METER).toFixed(2)}"></div>
+                                   <div><label class="text-sm font-medium">회전 (°)</label><input type="number" id="inspector-rotation" class="inspector-input" value="${((selectedShape.rotation || 0) * 180 / Math.PI).toFixed(1)}"></div>`;
+                        break;
+                    case 'line':
+                        const length = Math.hypot(selectedShape.x2 - selectedShape.x1, selectedShape.y2 - selectedShape.y1);
+                        const angle = Math.atan2(selectedShape.y2 - selectedShape.y1, selectedShape.x2 - selectedShape.x1) * 180 / Math.PI;
+                        content += `<div><label class="text-sm font-medium">길이 (m)</label><input type="number" step="0.1" id="inspector-length" class="inspector-input" value="${(length / PIXELS_PER_METER).toFixed(2)}"></div>
+                                   <div><label class="text-sm font-medium">회전 (°)</label><input type="number" id="inspector-rotation" class="inspector-input" value="${angle.toFixed(1)}"></div>`;
+                        break;
+                    case 'circle':
+                         content += `<div><label class="text-sm font-medium">지름 (m)</label><input type="number" step="0.1" id="inspector-diameter" class="inspector-input" value="${(selectedShape.radius * 2 / PIXELS_PER_METER).toFixed(2)}"></div>`;
+                        break;
+                }
+                content += `<div><label class="text-sm font-medium">선 두께</label><input type="number" id="inspector-line-width" class="inspector-input" value="${selectedShape.lineWidth || 1}" min="1"></div>
+                            <div><label class="text-sm font-medium">선 색상</label><input type="color" id="inspector-stroke-color" class="inspector-color-input" value="${selectedShape.strokeColor || '#000000'}"></div>`;
+                if (selectedShape.type !== 'line') { content += `<div><label class="text-sm font-medium">채우기 색상</label><input type="color" id="inspector-fill-color" class="inspector-color-input" value="${selectedShape.fillColor || '#E5E7EB'}"></div>`; }
+                content += `</div>`;
+                inspectorContent.innerHTML = content;
+                addInspectorListeners();
+            } else { // Multiple shapes selected
+                inspector.classList.remove('hidden');
+                inspectorContent.innerHTML = `<p class="text-gray-800 font-medium">${selectedShapes.length}개의 항목이 선택됨</p>`;
             }
-            content += `<div><label class="text-sm font-medium">선 두께</label><input type="number" id="inspector-line-width" class="inspector-input" value="${selectedShape.lineWidth || 1}" min="1"></div>
-                        <div><label class="text-sm font-medium">선 색상</label><input type="color" id="inspector-stroke-color" class="inspector-color-input" value="${selectedShape.strokeColor || '#000000'}"></div>`;
-            if (selectedShape.type !== 'line') { content += `<div><label class="text-sm font-medium">채우기 색상</label><input type="color" id="inspector-fill-color" class="inspector-color-input" value="${selectedShape.fillColor || '#E5E7EB'}"></div>`; }
-            content += `</div>`;
-            inspectorContent.innerHTML = content;
-            addInspectorListeners();
         }
 
         function addInspectorListeners() {
+            const selectedShape = selectedShapes[0];
+            if (!selectedShape) return;
+            
             const saveOnChange = () => { if(isAppReady) { draw(); saveState(); } };
             document.getElementById('inspector-name')?.addEventListener('change', e => { if (selectedShape) { selectedShape.name = e.target.value; saveOnChange(); } });
             document.getElementById('inspector-width')?.addEventListener('change', e => { if (selectedShape) { selectedShape.width = parseFloat(e.target.value) * PIXELS_PER_METER; saveOnChange(); } });
@@ -318,7 +331,9 @@
                 }
                 ctx.restore();
             });
-            if (selectedShape && currentTool === 'select') { drawSelection(selectedShape); }
+            if (selectedShapes.length > 0 && currentTool === 'select') {
+                selectedShapes.forEach(shape => drawSelection(shape));
+            }
             if (isDrawing) {
                 const worldStart = getWorldPos({x: startX, y: startY});
                 const worldEnd = getWorldPos({x: endX, y: endY});
@@ -335,6 +350,14 @@
                     Object.assign(previewShape, { cx: worldStart.x, cy: worldStart.y, radius: Math.hypot(worldEnd.x - worldStart.x, worldEnd.y - worldStart.y) });
                     drawCircle(previewShape);
                 }
+                ctx.restore();
+            }
+            if (isMultiSelecting) {
+                ctx.save();
+                ctx.strokeStyle = '#2563eb';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 2]);
+                ctx.strokeRect(selectionBox.x, selectionBox.y, selectionBox.width, selectionBox.height);
                 ctx.restore();
             }
             ctx.restore();
@@ -404,25 +427,37 @@
             ctx.restore();
             ctx.setLineDash([]);
 
-            for (const name in handles) {
-                const pos = handles[name];
-                if (name === 'rot') continue;
-                ctx.fillRect(pos.x - handleScreenSize / 2, pos.y - handleScreenSize / 2, handleScreenSize, handleScreenSize);
-            }
+            if (selectedShapes.length === 1) {
+                for (const name in handles) {
+                    const pos = handles[name];
+                    if (name === 'rot') continue;
+                    ctx.fillRect(pos.x - handleScreenSize / 2, pos.y - handleScreenSize / 2, handleScreenSize, handleScreenSize);
+                }
 
-            if (handles && handles.rot) {
-                const rotHandle = handles.rot;
-                const centerX = shape.type === 'rectangle' ? shape.x + shape.width / 2 : (shape.x1 + shape.x2) / 2;
-                const centerY = shape.type === 'rectangle' ? shape.y + shape.height / 2 : (shape.y1 + shape.y2) / 2;
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.lineTo(rotHandle.x, rotHandle.y);
-                ctx.stroke();
-                ctx.beginPath(); ctx.arc(rotHandle.x, rotHandle.y, handleScreenSize, 0, Math.PI * 2); ctx.fill();
+                if (handles && handles.rot) {
+                    const rotHandle = handles.rot;
+                    const centerX = shape.type === 'rectangle' ? shape.x + shape.width / 2 : (shape.x1 + shape.x2) / 2;
+                    const centerY = shape.type === 'rectangle' ? shape.y + shape.height / 2 : (shape.y1 + shape.y2) / 2;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(rotHandle.x, rotHandle.y);
+                    ctx.stroke();
+                    ctx.beginPath(); ctx.arc(rotHandle.x, rotHandle.y, handleScreenSize, 0, Math.PI * 2); ctx.fill();
+                }
             }
         }
 
         // --- Collision, Move, Resize, Rotate, Cursor ---
+        function isShapeInBox(shape, box) {
+            const shapeBbox = calculateBoundingBox([shape]);
+            if (!shapeBbox) return false;
+            return (
+                shapeBbox.x < box.x + box.width &&
+                shapeBbox.x + shapeBbox.width > box.x &&
+                shapeBbox.y < box.y + box.height &&
+                shapeBbox.y + shapeBbox.height > box.y
+            );
+        }
         function isMouseInShape(mx, my, shape) {
             switch (shape.type) {
                 case 'rectangle': {
@@ -481,27 +516,32 @@
             return {};
         }
         function getHandleAt(mx, my, shape) {
+            if (selectedShapes.length !== 1) return null; // Only show handles for single selection
             const handles = getHandlePositions(shape); const tolerance = (HANDLE_SIZE * 1.5) / scale;
             for (const name in handles) { if (Math.hypot(mx - handles[name].x, my - handles[name].y) < tolerance) return name; } return null;
         }
         function moveShape(mx, my) {
-            if (!selectedShape) return;
+            if (selectedShapes.length === 0) return;
             const dx = mx - dragStart.mouse.x;
             const dy = my - dragStart.mouse.y;
-            if (selectedShape.type === 'line') {
-                selectedShape.x1 = dragStart.shape.x1 + dx; selectedShape.y1 = dragStart.shape.y1 + dy;
-                selectedShape.x2 = dragStart.shape.x2 + dx; selectedShape.y2 = dragStart.shape.y2 + dy;
-            } else if (selectedShape.type === 'circle') {
-                 selectedShape.cx = dragStart.shape.cx + dx; selectedShape.cy = dragStart.shape.cy + dy;
-            } else {
-                selectedShape.x = dragStart.shape.x + dx; selectedShape.y = dragStart.shape.y + dy;
-            }
+            selectedShapes.forEach((shape, index) => {
+                const startShape = dragStart.shapes[index];
+                if (shape.type === 'line') {
+                    shape.x1 = startShape.x1 + dx; shape.y1 = startShape.y1 + dy;
+                    shape.x2 = startShape.x2 + dx; shape.y2 = startShape.y2 + dy;
+                } else if (shape.type === 'circle') {
+                     shape.cx = startShape.cx + dx; shape.cy = startShape.cy + dy;
+                } else {
+                    shape.x = startShape.x + dx; shape.y = startShape.y + dy;
+                }
+            });
         }
         function resizeShape(mx, my) {
-            if (!selectedShape || !resizeHandle) return;
+            if (selectedShapes.length !== 1 || !resizeHandle) return;
+            const selectedShape = selectedShapes[0];
             const minSize = MIN_SHAPE_SIZE / scale;
             if (selectedShape.type === 'rectangle') {
-                const original = dragStart.shape;
+                const original = dragStart.shapes[0];
                 const rotation = original.rotation || 0;
                 const cos = Math.cos(-rotation); const sin = Math.sin(-rotation);
                 const pivot = getHandlePositions(original)[Object.keys(getHandlePositions(original)).find(k => k.length === 2 && !resizeHandle.includes(k[0]) && !resizeHandle.includes(k[1]))];
@@ -537,7 +577,8 @@
             }
         }
         function rotateShape(mx, my) {
-            if (!selectedShape) return;
+            if (selectedShapes.length !== 1) return;
+            const selectedShape = selectedShapes[0];
             let centerX, centerY;
             if (selectedShape.type === 'rectangle') { centerX = selectedShape.x + selectedShape.width / 2; centerY = selectedShape.y + selectedShape.height / 2; } 
             else if (selectedShape.type === 'line') { centerX = (selectedShape.x1 + selectedShape.x2) / 2; centerY = (selectedShape.y1 + selectedShape.y2) / 2; } 
@@ -558,23 +599,30 @@
         function updateCursor(mx, my) {
             let cursor = 'default';
             if (currentTool === 'select') {
-                if (selectedShape) {
-                    const handle = getHandleAt(mx, my, selectedShape);
-                    if (handle) {
-                        if (handle === 'rot') cursor = 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'black\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpath d=\'M23 4v6h-6\'/%3E%3Cpath d=\'M20.49 15a9 9 0 1 1-2.12-9.36L23 10\'/%3E%3C/svg%3E") 16 16, auto';
-                        else cursor = 'pointer'; 
-                    } else if (isMouseInShape(mx, my, selectedShape)) {
-                        cursor = 'move';
+                const handle = getHandleAt(mx, my, selectedShapes[0]);
+                if (handle) {
+                    if (handle === 'rot') cursor = 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'black\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpath d=\'M23 4v6h-6\'/%3E%3Cpath d=\'M20.49 15a9 9 0 1 1-2.12-9.36L23 10\'/%3E%3C/svg%3E") 16 16, auto';
+                    else cursor = 'pointer'; 
+                } else {
+                    let shapeUnderCursor = null;
+                    for (let i = shapes.length - 1; i >= 0; i--) {
+                        if (isMouseInShape(mx, my, shapes[i])) {
+                            shapeUnderCursor = shapes[i];
+                            break;
+                        }
+                    }
+                    if (shapeUnderCursor) {
+                         cursor = 'move';
                     }
                 }
             } else { cursor = 'crosshair'; }
             canvas.style.cursor = cursor;
         }
         
-        function calculateBoundingBox() {
-            if (shapes.length === 0) return null;
+        function calculateBoundingBox(shapesToBound) {
+            if (!shapesToBound || shapesToBound.length === 0) return null;
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            shapes.forEach(shape => {
+            shapesToBound.forEach(shape => {
                 switch (shape.type) {
                     case 'rectangle': {
                         const corners = getHandlePositions(shape);
@@ -602,16 +650,17 @@
 
         // --- Event Handlers & Logic ---
         window.addEventListener('keydown', e => { 
-            if (!isAppReady) return;
             if (e.key === 'Shift') isShiftDown = true;
+            if (!isAppReady) return;
             if (document.activeElement.tagName.toLowerCase() === 'input') return;
-            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShape) {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapes.length > 0) {
                 e.preventDefault();
-                shapes = shapes.filter(s => s.id !== selectedShape.id);
-                selectShape(null);
+                const idsToDelete = new Set(selectedShapes.map(s => s.id));
+                shapes = shapes.filter(s => !idsToDelete.has(s.id));
+                setSelectedShapes([]);
                 saveState();
                 draw();
-                showToast('도형이 삭제되었습니다.');
+                showToast(`${idsToDelete.size}개의 항목이 삭제되었습니다.`);
             } else if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); } 
             else if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
         });
@@ -652,7 +701,7 @@
                             history = [];
                             historyIndex = -1;
                             saveState(); 
-                            selectShape(null);
+                            setSelectedShapes([]);
                             draw();
                             showToast('로컬 파일을 불러와 클라우드에 동기화했습니다.');
                         } else {
@@ -670,12 +719,13 @@
 
         deleteShapeBtn.addEventListener('click', () => { 
             if (!isAppReady) return;
-            if (selectedShape) { 
-                shapes = shapes.filter(s => s.id !== selectedShape.id); 
-                selectShape(null); 
+            if (selectedShapes.length > 0) {
+                const idsToDelete = new Set(selectedShapes.map(s => s.id));
+                shapes = shapes.filter(s => !idsToDelete.has(s.id));
+                setSelectedShapes([]);
                 saveState(); 
                 draw(); 
-                showToast('선택된 도형이 삭제되었습니다.'); 
+                showToast(`${idsToDelete.size}개의 항목이 삭제되었습니다.`);
             } else { 
                 showToast('삭제할 도형을 먼저 선택하세요.'); 
             } 
@@ -687,8 +737,8 @@
             const originalOffsetX = viewOffsetX;
             const originalOffsetY = viewOffsetY;
             const originalShowDimensions = showDimensions;
-            selectShape(null);
-            const bbox = calculateBoundingBox();
+            setSelectedShapes([]);
+            const bbox = calculateBoundingBox(shapes);
             if (!bbox || bbox.width <= 0 || bbox.height <= 0) {
                 showToast('인쇄할 내용이 없습니다.');
                 return;
@@ -730,45 +780,86 @@
                 showToast('클라우드 데이터를 로딩 중입니다. 잠시만 기다려주세요.');
                 return;
             }
-            const screenPos = getScreenPos(e); if (e.button === 1) { isPanning = true; lastPanPoint = screenPos; canvas.style.cursor = 'grabbing'; e.preventDefault(); return; }
-            const worldPos = getWorldPos(screenPos); startX = screenPos.x; startY = screenPos.y;
+            const screenPos = getScreenPos(e); 
+            if (e.button === 1) { 
+                isPanning = true; 
+                lastPanPoint = screenPos; 
+                canvas.style.cursor = 'grabbing'; 
+                e.preventDefault(); 
+                return; 
+            }
+            
+            const worldPos = getWorldPos(screenPos); 
+            startX = screenPos.x; 
+            startY = screenPos.y;
+            
             if (currentTool === 'select') {
-                if (selectedShape) {
-                    const handle = getHandleAt(worldPos.x, worldPos.y, selectedShape);
-                    if (handle) {
-                        if (handle === 'rot') { isRotating = true; } else { isResizing = true; resizeHandle = handle; }
-                        dragStart.mouse = worldPos;
-                        dragStart.shape = JSON.parse(JSON.stringify(selectedShape));
-                        return;
-                    }
-                }
-                let clickedShape = null; for (let i = shapes.length - 1; i >= 0; i--) { if (isMouseInShape(worldPos.x, worldPos.y, shapes[i])) { clickedShape = shapes[i]; break; } }
-                selectShape(clickedShape);
-                if (selectedShape) {
-                    isDragging = true;
+                const handle = selectedShapes.length === 1 ? getHandleAt(worldPos.x, worldPos.y, selectedShapes[0]) : null;
+
+                if (handle) {
+                    isResizing = handle !== 'rot';
+                    isRotating = handle === 'rot';
                     dragStart.mouse = worldPos;
-                    dragStart.shape = JSON.parse(JSON.stringify(selectedShape));
+                    dragStart.shapes = selectedShapes.map(s => JSON.parse(JSON.stringify(s)));
+                    resizeHandle = handle;
+                    return;
                 }
+
+                const shapeUnderCursor = shapes.slice().reverse().find(shape => isMouseInShape(worldPos.x, worldPos.y, shape));
+                
+                if (shapeUnderCursor) {
+                    isDragging = true;
+                    if (isShiftDown) {
+                        const index = selectedShapes.findIndex(s => s.id === shapeUnderCursor.id);
+                        if (index > -1) {
+                            selectedShapes.splice(index, 1);
+                        } else {
+                            selectedShapes.push(shapeUnderCursor);
+                        }
+                    } else {
+                        if (!selectedShapes.find(s => s.id === shapeUnderCursor.id)) {
+                            setSelectedShapes([shapeUnderCursor]);
+                        }
+                    }
+                    dragStart.mouse = worldPos;
+                    dragStart.shapes = selectedShapes.map(s => JSON.parse(JSON.stringify(s)));
+                } else {
+                    isMultiSelecting = true;
+                    if (!isShiftDown) {
+                        setSelectedShapes([]);
+                    }
+                    selectionBox = { x: screenPos.x, y: screenPos.y, width: 0, height: 0 };
+                }
+
             } else { isDrawing = true; }
         });
 
         canvas.addEventListener('mousemove', (e) => {
             if (!isAppReady) return;
-            const screenPos = getScreenPos(e); endX = screenPos.x; endY = screenPos.y;
-            if (isPanning) { viewOffsetX += screenPos.x - lastPanPoint.x; viewOffsetY += screenPos.y - lastPanPoint.y; lastPanPoint = screenPos; } 
-            else if (currentTool === 'select') {
-                const worldPos = getWorldPos(screenPos);
+            const screenPos = getScreenPos(e); 
+            const worldPos = getWorldPos(screenPos);
+            endX = screenPos.x; 
+            endY = screenPos.y;
+            if (isPanning) { 
+                viewOffsetX += screenPos.x - lastPanPoint.x; 
+                viewOffsetY += screenPos.y - lastPanPoint.y; 
+                lastPanPoint = screenPos; 
+            } else if (currentTool === 'select') {
                 if (isRotating) { rotateShape(worldPos.x, worldPos.y); }
                 else if (isResizing) { resizeShape(worldPos.x, worldPos.y); } 
                 else if (isDragging) { moveShape(worldPos.x, worldPos.y); } 
-                else { updateCursor(worldPos.x, worldPos.y); }
+                else if (isMultiSelecting) {
+                    selectionBox.width = screenPos.x - selectionBox.x;
+                    selectionBox.height = screenPos.y - selectionBox.y;
+                } else { updateCursor(worldPos.x, worldPos.y); }
             }
-            if(isDrawing || isResizing || isDragging || isPanning || isRotating) draw();
+            if(isDrawing || isResizing || isDragging || isPanning || isRotating || isMultiSelecting) draw();
         });
 
         canvas.addEventListener('mouseup', (e) => {
             if (!isAppReady) return;
             let shapeDrawn = false;
+            let selectionChanged = false;
             const actionOccurred = isDragging || isResizing || isRotating;
             if (isPanning) {
                 isPanning = false;
@@ -803,25 +894,47 @@
                 }
                 
                 if (newShape) {
-                     selectShape(newShape);
+                     setSelectedShapes([newShape]);
                 }
                 setActiveTool('select');
-            }
-            
-            if (actionOccurred || shapeDrawn) {
-                updateInspector();
-                saveState();
+            } else if (isMultiSelecting) {
+                const boxWorld = {
+                    x: (Math.min(selectionBox.x, selectionBox.x + selectionBox.width) - viewOffsetX) / scale,
+                    y: (Math.min(selectionBox.y, selectionBox.y + selectionBox.height) - viewOffsetY) / scale,
+                    width: Math.abs(selectionBox.width) / scale,
+                    height: Math.abs(selectionBox.height) / scale
+                };
+                const shapesInBox = shapes.filter(shape => isShapeInBox(shape, boxWorld));
+                if (!isShiftDown) {
+                    setSelectedShapes(shapesInBox);
+                } else {
+                    shapesInBox.forEach(shape => {
+                        if (!selectedShapes.find(s => s.id === shape.id)) {
+                            selectedShapes.push(shape);
+                        }
+                    });
+                    setSelectedShapes([...selectedShapes]);
+                }
+                selectionChanged = true;
             }
 
-            isDrawing = false; isDragging = false; isResizing = false; isRotating = false; resizeHandle = null;
+            if (actionOccurred || shapeDrawn) {
+                saveState();
+            }
+            if (actionOccurred || shapeDrawn || selectionChanged) {
+                 updateInspector();
+            }
+
+            isDrawing = false; isDragging = false; isResizing = false; isRotating = false; isMultiSelecting = false;
+            resizeHandle = null; selectionBox = {};
             draw();
         });
         canvas.addEventListener('dblclick', (e) => { 
-            if (!isAppReady) return;
-            if (currentTool === 'select' && selectedShape) { 
-                const newName = prompt('새로운 이름을 입력하세요:', selectedShape.name); 
+            if (!isAppReady || selectedShapes.length !== 1) return;
+            if (currentTool === 'select' && selectedShapes[0]) { 
+                const newName = prompt('새로운 이름을 입력하세요:', selectedShapes[0].name); 
                 if (newName !== null) { 
-                    selectedShape.name = newName.trim() || '이름 없음'; 
+                    selectedShapes[0].name = newName.trim() || '이름 없음'; 
                     draw(); 
                     saveState(); 
                     updateInspector(); 
@@ -834,8 +947,8 @@
             const docRef = doc(db, 'artifacts', appId, 'users', userId, 'drawings', 'main');
             
             const unsubscribe = onSnapshot(docRef, (docSnap) => {
-                if (dataLoaded) return; // Only process the first snapshot
-                dataLoaded = true; // Set flag immediately to prevent re-entry
+                if (dataLoaded) return; 
+                dataLoaded = true;
                 
                 if (docSnap.exists()) {
                     const cloudData = docSnap.data().data;
@@ -866,7 +979,7 @@
                 saveStatus.classList.remove('text-gray-500', 'text-red-500');
                 saveStatus.classList.add('text-green-600');
                 
-                unsubscribe(); // We only need the initial data, then we save changes from this client.
+                unsubscribe();
 
             }, (error) => {
                 console.error("Error listening to Firestore:", error);
@@ -889,7 +1002,6 @@
                 if (firebaseConfigString) {
                      firebaseConfig = JSON.parse(firebaseConfigString);
                 } else {
-                    // Fallback for local/external development (e.g., StackBlitz)
                     firebaseConfig = {
                         apiKey: "AIzaSyAGS8FxM4cPfPAOUnOSzLKTZAdT66bU3aU",
                         authDomain: "leondk25ai.firebaseapp.com",
@@ -912,7 +1024,6 @@
                            await setupFirestoreListener();
                         }
                     } else {
-                        // No user is signed in, attempt to sign in.
                         const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                         try {
                             if (token) {
