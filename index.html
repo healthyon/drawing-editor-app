@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>한성헬시온 도면 편집기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: 'Noto Sans KR', sans-serif;
+      }
+      canvas {
+        cursor: crosshair;
+        border: 1px solid #d1d5db;
+        background-color: #f9fafb;
+      }
+      .toast {
+        visibility: hidden;
+        min-width: 250px;
+        background-color: #333;
+        color: #fff;
+        text-align: center;
+        border-radius: 8px;
+        padding: 16px;
+        position: fixed;
+        z-index: 10;
+        left: 50%;
+        bottom: 30px;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: visibility 0s 0.5s, opacity 0.5s linear;
+      }
+      .toast.show {
+        visibility: visible;
+        opacity: 1;
+        transition: opacity 0.5s linear;
+      }
+      .tool-btn.active {
+        background-color: #3b82f6;
+        color: white;
+        font-weight: bold;
+      }
+      .tool-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4"
+  >
+    <div
+      class="w-full max-w-screen-xl mx-auto bg-white rounded-xl shadow-lg p-6"
+    >
+      <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">
+        한성헬시온 도면 편집기
+      </h1>
+
+      <!-- Toolbar -->
+      <div class="mb-6 p-4 bg-gray-50 rounded-lg border">
+        <div class="flex items-center space-x-2 flex-wrap gap-2">
+          <label class="text-sm font-medium text-gray-700">파일:</label>
+          <button
+            id="saveBtn"
+            class="tool-btn bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md"
+          >
+            로컬 저장
+          </button>
+          <button
+            id="loadBtn"
+            class="tool-btn bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+          >
+            로컬 불러오기
+          </button>
+          <button
+            id="saveToCloudBtn"
+            class="tool-btn bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md"
+          >
+            ☁️ 클라우드 저장
+          </button>
+          <button
+            id="loadFromCloudBtn"
+            class="tool-btn bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-md"
+          >
+            ☁️ 클라우드 불러오기
+          </button>
+
+          <label class="text-sm font-medium text-gray-700 ml-4">도구:</label>
+          <button
+            id="tool-select"
+            class="tool-btn bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-md transition active"
+          >
+            선택/이동
+          </button>
+          <button
+            id="tool-rectangle"
+            class="tool-btn bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-md transition"
+          >
+            사각형
+          </button>
+          <button
+            id="tool-line"
+            class="tool-btn bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-md transition"
+          >
+            선
+          </button>
+          <button
+            id="tool-circle"
+            class="tool-btn bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-md transition"
+          >
+            원
+          </button>
+          <button
+            id="deleteShapeBtn"
+            class="bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700"
+          >
+            선택 삭제
+          </button>
+          <button
+            id="clearBtn"
+            class="bg-red-700 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-800"
+          >
+            전체 삭제
+          </button>
+        </div>
+      </div>
+
+      <!-- Canvas Area -->
+      <div class="flex flex-col gap-4">
+        <div
+          id="canvas-container"
+          class="w-full h-96 bg-white rounded-lg overflow-hidden border"
+        >
+          <canvas id="drawingCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Instructions -->
+      <div class="mt-4 text-center text-gray-600 text-sm">
+        <p>
+          <strong class="font-semibold">사용법:</strong> 도구 선택 → 캔버스에
+          그리기 | Delete키로 선택된 도형 삭제 | 클라우드 저장/불러오기로 온라인
+          동기화
+        </p>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script type="module">
+      // Firebase 설정 (실제 Firebase 설정 정보로 교체하세요!)
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+      import {
+        getFirestore,
+        collection,
+        addDoc,
+        getDocs,
+        doc,
+        updateDoc,
+        deleteDoc,
+        query,
+        orderBy,
+      } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+      const firebaseConfig = {
+        apiKey: 'AIzaSyAGS8FxM4cPfPAOUnOSzLKTZAdT66bU3aU',
+        authDomain: 'leondk25ai.firebaseapp.com',
+        projectId: 'leondk25ai',
+        storageBucket: 'leondk25ai.firebasestorage.app',
+        messagingSenderId: '903396777598',
+        appId: '1:903396777598:web:bfe98832772bf48bf3022f',
+      };
+
+      // Firebase 초기화
+      let app, db;
+      let firebaseEnabled = false;
+
+      try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        firebaseEnabled = true;
+        console.log('✅ Firebase 연결 성공');
+      } catch (error) {
+        console.log('❌ Firebase 연결 실패:', error);
+        firebaseEnabled = false;
+      }
+
+      // DOM Elements
+      const canvas = document.getElementById('drawingCanvas');
+      const ctx = canvas.getContext('2d');
+      const canvasContainer = document.getElementById('canvas-container');
+      const toast = document.getElementById('toast');
+      const toolBtns = {
+        select: document.getElementById('tool-select'),
+        rectangle: document.getElementById('tool-rectangle'),
+        line: document.getElementById('tool-line'),
+        circle: document.getElementById('tool-circle'),
+      };
+      const saveBtn = document.getElementById('saveBtn');
+      const loadBtn = document.getElementById('loadBtn');
+      const saveToCloudBtn = document.getElementById('saveToCloudBtn');
+      const loadFromCloudBtn = document.getElementById('loadFromCloudBtn');
+      const deleteShapeBtn = document.getElementById('deleteShapeBtn');
+      const clearBtn = document.getElementById('clearBtn');
+
+      // State Management
+      let shapes = [];
+      let selectedShape = null;
+      let currentTool = 'select';
+      let isDrawing = false;
+      let isDragging = false;
+      let startX, startY, endX, endY;
+      let dragStart = {};
+
+      // Utility Functions
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+      }
+
+      function getMousePos(e) {
+        const rect = canvas.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+
+      function resizeCanvas() {
+        canvas.width = canvasContainer.clientWidth;
+        canvas.height = canvasContainer.clientHeight;
+        draw();
+      }
+
+      function setActiveTool(tool) {
+        currentTool = tool;
+        Object.keys(toolBtns).forEach((key) => {
+          toolBtns[key].classList.toggle('active', key === tool);
+        });
+        canvas.style.cursor = tool === 'select' ? 'default' : 'crosshair';
+        selectedShape = null;
+        draw();
+      }
+
+      // Drawing Functions
+      function drawRectangle(shape) {
+        ctx.fillStyle = shape.fillColor || '#E5E7EB';
+        ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+        ctx.strokeStyle = shape.strokeColor || '#000000';
+        ctx.lineWidth = shape.lineWidth || 1;
+        ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+
+        if (shape.name) {
+          ctx.fillStyle = '#111827';
+          ctx.font = 'bold 14px "Noto Sans KR"';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(
+            shape.name,
+            shape.x + shape.width / 2,
+            shape.y + shape.height / 2
+          );
+        }
+      }
+
+      function drawLine(shape) {
+        ctx.beginPath();
+        ctx.moveTo(shape.x1, shape.y1);
+        ctx.lineTo(shape.x2, shape.y2);
+        ctx.strokeStyle = shape.strokeColor || '#000000';
+        ctx.lineWidth = shape.lineWidth || 1;
+        ctx.stroke();
+      }
+
+      function drawCircle(shape) {
+        ctx.beginPath();
+        ctx.arc(shape.cx, shape.cy, shape.radius, 0, Math.PI * 2);
+        ctx.fillStyle = shape.fillColor || '#E5E7EB';
+        ctx.fill();
+        ctx.strokeStyle = shape.strokeColor || '#000000';
+        ctx.lineWidth = shape.lineWidth || 1;
+        ctx.stroke();
+
+        if (shape.name) {
+          ctx.fillStyle = '#111827';
+          ctx.font = 'bold 14px "Noto Sans KR"';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(shape.name, shape.cx, shape.cy);
+        }
+      }
+
+      function drawSelection(shape) {
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+
+        if (shape.type === 'rectangle') {
+          ctx.strokeRect(
+            shape.x - 2,
+            shape.y - 2,
+            shape.width + 4,
+            shape.height + 4
+          );
+        } else if (shape.type === 'circle') {
+          ctx.beginPath();
+          ctx.arc(shape.cx, shape.cy, shape.radius + 2, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (shape.type === 'line') {
+          ctx.beginPath();
+          ctx.moveTo(shape.x1, shape.y1);
+          ctx.lineTo(shape.x2, shape.y2);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        shapes.forEach((shape) => {
+          switch (shape.type) {
+            case 'rectangle':
+              drawRectangle(shape);
+              break;
+            case 'line':
+              drawLine(shape);
+              break;
+            case 'circle':
+              drawCircle(shape);
+              break;
+          }
+        });
+
+        if (selectedShape) {
+          drawSelection(selectedShape);
+        }
+
+        if (isDrawing && startX !== undefined) {
+          ctx.save();
+          ctx.globalAlpha = 0.6;
+          ctx.strokeStyle = '#3b82f6';
+          ctx.fillStyle = '#bfdbfe';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+
+          if (currentTool === 'rectangle') {
+            const x = Math.min(startX, endX);
+            const y = Math.min(startY, endY);
+            const width = Math.abs(startX - endX);
+            const height = Math.abs(startY - endY);
+            ctx.fillRect(x, y, width, height);
+            ctx.strokeRect(x, y, width, height);
+          } else if (currentTool === 'line') {
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+          } else if (currentTool === 'circle') {
+            const radius = Math.hypot(endX - startX, endY - startY);
+            ctx.beginPath();
+            ctx.arc(startX, startY, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+
+      // Shape Interaction
+      function isMouseInShape(mx, my, shape) {
+        switch (shape.type) {
+          case 'rectangle':
+            return (
+              mx >= shape.x &&
+              mx <= shape.x + shape.width &&
+              my >= shape.y &&
+              my <= shape.y + shape.height
+            );
+          case 'circle':
+            return Math.hypot(mx - shape.cx, my - shape.cy) <= shape.radius;
+          case 'line':
+            const tolerance = 5;
+            const d =
+              Math.abs(
+                (shape.y2 - shape.y1) * mx -
+                  (shape.x2 - shape.x1) * my +
+                  shape.x2 * shape.y1 -
+                  shape.y2 * shape.x1
+              ) / Math.hypot(shape.y2 - shape.y1, shape.x2 - shape.x1);
+            return (
+              d <= tolerance &&
+              mx >= Math.min(shape.x1, shape.x2) - tolerance &&
+              mx <= Math.max(shape.x1, shape.x2) + tolerance &&
+              my >= Math.min(shape.y1, shape.y2) - tolerance &&
+              my <= Math.max(shape.y1, shape.y2) + tolerance
+            );
+        }
+        return false;
+      }
+
+      // Firebase Functions
+      async function saveToCloud() {
+        if (!firebaseEnabled) {
+          showToast('Firebase가 연결되지 않았습니다. 설정을 확인하세요.');
+          return;
+        }
+
+        try {
+          const projectName = prompt(
+            '프로젝트 이름을 입력하세요:',
+            'my-drawing-' + Date.now()
+          );
+          if (!projectName) return;
+
+          await addDoc(collection(db, 'drawings'), {
+            name: projectName,
+            shapes: shapes,
+            createdAt: new Date(),
+          });
+
+          showToast(`✅ 클라우드에 저장되었습니다: ${projectName}`);
+        } catch (error) {
+          console.error('Error saving to cloud:', error);
+          showToast('❌ 클라우드 저장 중 오류가 발생했습니다.');
+        }
+      }
+
+      async function loadFromCloud() {
+        if (!firebaseEnabled) {
+          showToast('Firebase가 연결되지 않았습니다. 설정을 확인하세요.');
+          return;
+        }
+
+        try {
+          const q = query(
+            collection(db, 'drawings'),
+            orderBy('createdAt', 'desc')
+          );
+          const querySnapshot = await getDocs(q);
+
+          if (querySnapshot.empty) {
+            showToast('저장된 도면이 없습니다.');
+            return;
+          }
+
+          let options = '저장된 도면 목록:\n\n';
+          const docs = [];
+          querySnapshot.forEach((doc, index) => {
+            const data = doc.data();
+            docs.push({ id: doc.id, data });
+            options += `${index + 1}. ${data.name} (${data.createdAt
+              .toDate()
+              .toLocaleDateString()})\n`;
+          });
+
+          const selection = prompt(
+            options + '\n불러올 도면 번호를 입력하세요:'
+          );
+          const index = parseInt(selection) - 1;
+
+          if (index >= 0 && index < docs.length) {
+            shapes = docs[index].data.shapes || [];
+            selectedShape = null;
+            draw();
+            showToast(`✅ 도면을 불러왔습니다: ${docs[index].data.name}`);
+          } else {
+            showToast('잘못된 선택입니다.');
+          }
+        } catch (error) {
+          console.error('Error loading from cloud:', error);
+          showToast('❌ 클라우드 불러오기 중 오류가 발생했습니다.');
+        }
+      }
+
+      // Event Listeners
+      Object.keys(toolBtns).forEach((key) => {
+        toolBtns[key].addEventListener('click', () => setActiveTool(key));
+      });
+
+      canvas.addEventListener('mousedown', (e) => {
+        const pos = getMousePos(e);
+
+        if (currentTool === 'select') {
+          selectedShape = null;
+          for (let i = shapes.length - 1; i >= 0; i--) {
+            if (isMouseInShape(pos.x, pos.y, shapes[i])) {
+              selectedShape = shapes[i];
+              isDragging = true;
+              dragStart = { x: pos.x, y: pos.y, shape: { ...selectedShape } };
+              break;
+            }
+          }
+          draw();
+        } else {
+          startX = pos.x;
+          startY = pos.y;
+          isDrawing = true;
+        }
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        const pos = getMousePos(e);
+
+        if (isDragging && selectedShape) {
+          const dx = pos.x - dragStart.x;
+          const dy = pos.y - dragStart.y;
+
+          if (selectedShape.type === 'rectangle') {
+            selectedShape.x = dragStart.shape.x + dx;
+            selectedShape.y = dragStart.shape.y + dy;
+          } else if (selectedShape.type === 'circle') {
+            selectedShape.cx = dragStart.shape.cx + dx;
+            selectedShape.cy = dragStart.shape.cy + dy;
+          } else if (selectedShape.type === 'line') {
+            selectedShape.x1 = dragStart.shape.x1 + dx;
+            selectedShape.y1 = dragStart.shape.y1 + dy;
+            selectedShape.x2 = dragStart.shape.x2 + dx;
+            selectedShape.y2 = dragStart.shape.y2 + dy;
+          }
+          draw();
+        } else if (isDrawing) {
+          endX = pos.x;
+          endY = pos.y;
+          draw();
+        }
+      });
+
+      canvas.addEventListener('mouseup', (e) => {
+        if (isDragging) {
+          isDragging = false;
+          return;
+        }
+
+        if (isDrawing) {
+          const pos = getMousePos(e);
+          endX = pos.x;
+          endY = pos.y;
+
+          const newShape = {
+            id: Date.now(),
+            strokeColor: '#000000',
+            fillColor: '#E5E7EB',
+            lineWidth: 1,
+          };
+
+          if (currentTool === 'rectangle') {
+            const name = prompt('사각형 이름을 입력하세요:', '');
+            Object.assign(newShape, {
+              type: 'rectangle',
+              name: name || '사각형',
+              x: Math.min(startX, endX),
+              y: Math.min(startY, endY),
+              width: Math.abs(startX - endX),
+              height: Math.abs(startY - endY),
+            });
+            if (newShape.width > 5 && newShape.height > 5) {
+              shapes.push(newShape);
+              showToast('사각형이 생성되었습니다.');
+            }
+          } else if (currentTool === 'line') {
+            Object.assign(newShape, {
+              type: 'line',
+              x1: startX,
+              y1: startY,
+              x2: endX,
+              y2: endY,
+            });
+            shapes.push(newShape);
+            showToast('선이 생성되었습니다.');
+          } else if (currentTool === 'circle') {
+            const name = prompt('원의 이름을 입력하세요:', '');
+            const radius = Math.hypot(endX - startX, endY - startY);
+            Object.assign(newShape, {
+              type: 'circle',
+              name: name || '원',
+              cx: startX,
+              cy: startY,
+              radius: radius,
+            });
+            if (radius > 5) {
+              shapes.push(newShape);
+              showToast('원이 생성되었습니다.');
+            }
+          }
+
+          isDrawing = false;
+          setActiveTool('select');
+          draw();
+        }
+      });
+
+      // Button Event Listeners
+      saveBtn.addEventListener('click', () => {
+        const data = JSON.stringify(shapes, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'drawing.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('파일이 다운로드되었습니다.');
+      });
+
+      loadBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+          const file = e.target.files[0];
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            try {
+              shapes = JSON.parse(event.target.result) || [];
+              selectedShape = null;
+              draw();
+              showToast('파일을 불러왔습니다.');
+            } catch (err) {
+              showToast('파일 형식이 올바르지 않습니다.');
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      });
+
+      saveToCloudBtn.addEventListener('click', saveToCloud);
+      loadFromCloudBtn.addEventListener('click', loadFromCloud);
+
+      deleteShapeBtn.addEventListener('click', () => {
+        if (selectedShape) {
+          shapes = shapes.filter((s) => s.id !== selectedShape.id);
+          selectedShape = null;
+          draw();
+          showToast('선택된 도형이 삭제되었습니다.');
+        } else {
+          showToast('삭제할 도형을 먼저 선택하세요.');
+        }
+      });
+
+      clearBtn.addEventListener('click', () => {
+        if (confirm('모든 도형을 삭제하시겠습니까?')) {
+          shapes = [];
+          selectedShape = null;
+          draw();
+          showToast('모든 도형이 삭제되었습니다.');
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShape) {
+          shapes = shapes.filter((s) => s.id !== selectedShape.id);
+          selectedShape = null;
+          draw();
+          showToast('도형이 삭제되었습니다.');
+        }
+      });
+
+      // Initialization
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+      showToast(
+        firebaseEnabled
+          ? '🔥 Firebase 연결됨! 클라우드 기능을 사용할 수 있습니다.'
+          : '⚠️ Firebase 설정을 완료하면 클라우드 기능을 사용할 수 있습니다.'
+      );
+    </script>
+  </body>
+</html>
