@@ -286,7 +286,8 @@
                          const rX = selectedShape.radiusX || selectedShape.radius;
                          const rY = selectedShape.radiusY || selectedShape.radius;
                          content += `<div><label class="text-sm font-medium">가로 지름 (m)</label><input type="number" step="0.1" id="inspector-diameterX" class="inspector-input" value="${(rX * 2 / PIXELS_PER_METER).toFixed(2)}"></div>
-                                    <div><label class="text-sm font-medium">세로 지름 (m)</label><input type="number" step="0.1" id="inspector-diameterY" class="inspector-input" value="${(rY * 2 / PIXELS_PER_METER).toFixed(2)}"></div>`;
+                                    <div><label class="text-sm font-medium">세로 지름 (m)</label><input type="number" step="0.1" id="inspector-diameterY" class="inspector-input" value="${(rY * 2 / PIXELS_PER_METER).toFixed(2)}"></div>
+                                    <div><label class="text-sm font-medium">회전 (°)</label><input type="number" id="inspector-rotation" class="inspector-input" value="${((selectedShape.rotation || 0) * 180 / Math.PI).toFixed(1)}"></div>`;
                         break;
                 }
                 content += `<div><label class="text-sm font-medium">선 두께</label><input type="number" id="inspector-line-width" class="inspector-input" value="${selectedShape.lineWidth || 1}" min="1"></div>
@@ -312,7 +313,7 @@
             document.getElementById('inspector-rotation')?.addEventListener('change', e => {
                  if (selectedShape) {
                     const newAngleRad = parseFloat(e.target.value) * Math.PI / 180;
-                    if (selectedShape.type === 'rectangle') {
+                    if (selectedShape.type === 'rectangle' || selectedShape.type === 'circle') {
                         selectedShape.rotation = newAngleRad;
                     } else if (selectedShape.type === 'line') {
                         const cx = (selectedShape.x1 + selectedShape.x2) / 2;
@@ -615,21 +616,24 @@
             ctx.setLineDash([]);
 
             if (selectedShapes.length === 1) {
+                let rotHandle;
+                if(shape.type === 'rectangle' || shape.type === 'circle' || shape.type === 'line'){
+                    const centerX = shape.type === 'rectangle' ? shape.x + shape.width / 2 : shape.type === 'circle' ? shape.cx : (shape.x1 + shape.x2) / 2;
+                    const centerY = shape.type === 'rectangle' ? shape.y + shape.height / 2 : shape.type === 'circle' ? shape.cy : (shape.y1 + shape.y2) / 2;
+                     if (handles.rot) {
+                        rotHandle = handles.rot;
+                        ctx.beginPath();
+                        ctx.moveTo(centerX, centerY);
+                        ctx.lineTo(rotHandle.x, rotHandle.y);
+                        ctx.stroke();
+                        ctx.beginPath(); ctx.arc(rotHandle.x, rotHandle.y, handleScreenSize/2, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
+                
                 for (const name in handles) {
                     const pos = handles[name];
                     if (name === 'rot') continue;
                     ctx.fillRect(pos.x - handleScreenSize / 2, pos.y - handleScreenSize / 2, handleScreenSize, handleScreenSize);
-                }
-
-                if (handles && handles.rot) {
-                    const rotHandle = handles.rot;
-                    const centerX = shape.type === 'rectangle' ? shape.x + shape.width / 2 : (shape.x1 + shape.x2) / 2;
-                    const centerY = shape.type === 'rectangle' ? shape.y + shape.height / 2 : (shape.y1 + shape.y2) / 2;
-                    ctx.beginPath();
-                    ctx.moveTo(centerX, centerY);
-                    ctx.lineTo(rotHandle.x, rotHandle.y);
-                    ctx.stroke();
-                    ctx.beginPath(); ctx.arc(rotHandle.x, rotHandle.y, handleScreenSize, 0, Math.PI * 2); ctx.fill();
                 }
             }
         }
@@ -716,7 +720,8 @@
                 
                 const unrotatedHandles = {
                     n: { x: 0, y: -rY }, s: { x: 0, y: rY },
-                    w: { x: -rX, y: 0 }, e: { x: rX, y: 0 }
+                    w: { x: -rX, y: 0 }, e: { x: rX, y: 0 },
+                    rot: {x: 0, y: -rY - ROTATE_HANDLE_OFFSET / scale }
                 };
                 const rotatedHandles = {};
                  for(const name in unrotatedHandles) {
@@ -735,22 +740,7 @@
             const handles = getHandlePositions(shape); const tolerance = (HANDLE_SIZE * 1.5) / scale;
             for (const name in handles) { if (Math.hypot(mx - handles[name].x, my - handles[name].y) < tolerance) return name; } return null;
         }
-        function moveShape(mx, my) {
-            if (selectedShapes.length === 0) return;
-            const dx = mx - dragStart.mouse.x;
-            const dy = my - dragStart.mouse.y;
-            selectedShapes.forEach((shape, index) => {
-                const startShape = dragStart.shapes[index];
-                if (shape.type === 'line') {
-                    shape.x1 = startShape.x1 + dx; shape.y1 = startShape.y1 + dy;
-                    shape.x2 = startShape.x2 + dx; shape.y2 = startShape.y2 + dy;
-                } else if (shape.type === 'circle') {
-                     shape.cx = startShape.cx + dx; shape.cy = startShape.cy + dy;
-                } else {
-                    shape.x = startShape.x + dx; shape.y = startShape.y + dy;
-                }
-            });
-        }
+
         function resizeShape(mx, my) {
             if (selectedShapes.length !== 1 || !resizeHandle) return;
             const selectedShape = selectedShapes[0];
@@ -787,25 +777,31 @@
                 if (resizeHandle === 'start') { selectedShape.x1 = newMx; selectedShape.y1 = newMy; } 
                 else { selectedShape.x2 = newMx; selectedShape.y2 = newMy; }
             } else if (selectedShape.type === 'circle') {
-                const dx = mx - selectedShape.cx;
-                const dy = my - selectedShape.cy;
-                let newRadiusX = selectedShape.radiusX;
-                let newRadiusY = selectedShape.radiusY;
+                const { cx, cy, rotation = 0 } = selectedShape;
+                const dx = mx - cx;
+                const dy = my - cy;
 
-                switch(resizeHandle) {
+                const cos = Math.cos(-rotation);
+                const sin = Math.sin(-rotation);
+                const rotatedDx = dx * cos + dy * sin;
+                const rotatedDy = -dx * sin + dy * cos;
+
+                let newRadiusX, newRadiusY;
+
+                switch (resizeHandle) {
                     case 'n':
                     case 's':
-                        newRadiusY = Math.abs(dy);
-                        if (isShiftDown) newRadiusX = newRadiusY;
+                        newRadiusY = Math.abs(rotatedDy);
+                        newRadiusX = isShiftDown ? newRadiusY : selectedShape.radiusX;
                         break;
                     case 'e':
                     case 'w':
-                        newRadiusX = Math.abs(dx);
-                        if (isShiftDown) newRadiusY = newRadiusX;
+                        newRadiusX = Math.abs(rotatedDx);
+                        newRadiusY = isShiftDown ? newRadiusX : selectedShape.radiusY;
                         break;
                 }
-                selectedShape.radiusX = newRadiusX;
-                selectedShape.radiusY = newRadiusY;
+                selectedShape.radiusX = newRadiusX > minSize / 2 ? newRadiusX : minSize / 2;
+                selectedShape.radiusY = newRadiusY > minSize / 2 ? newRadiusY : minSize / 2;
             }
         }
         function rotateShape(mx, my) {
@@ -814,12 +810,22 @@
             let centerX, centerY;
             if (selectedShape.type === 'rectangle') { centerX = selectedShape.x + selectedShape.width / 2; centerY = selectedShape.y + selectedShape.height / 2; } 
             else if (selectedShape.type === 'line') { centerX = (selectedShape.x1 + selectedShape.x2) / 2; centerY = (selectedShape.y1 + selectedShape.y2) / 2; } 
+            else if (selectedShape.type === 'circle') { centerX = selectedShape.cx; centerY = selectedShape.cy; }
             else { return; }
+            
             let angle = Math.atan2(my - centerY, mx - centerX);
-            if(selectedShape.type === 'rectangle') angle += Math.PI / 2;
+            
+            if (selectedShape.type === 'rectangle') { 
+                angle += Math.PI / 2; // Adjust for rectangle handle position
+            } else if (selectedShape.type === 'circle') {
+                 angle += Math.PI / 2; // Adjust for circle handle position
+            }
+
             if (isShiftDown) { angle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4); }
-            if (selectedShape.type === 'rectangle') { selectedShape.rotation = angle; } 
-            else if (selectedShape.type === 'line') {
+            
+            if (selectedShape.type === 'rectangle' || selectedShape.type === 'circle') { 
+                selectedShape.rotation = angle;
+            } else if (selectedShape.type === 'line') {
                 const length = Math.hypot(selectedShape.x2 - selectedShape.x1, selectedShape.y2 - selectedShape.y1);
                 const halfLen = length / 2;
                 selectedShape.x1 = centerX - halfLen * Math.cos(angle);
@@ -855,28 +861,35 @@
             if (!shapesToBound || shapesToBound.length === 0) return null;
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             shapesToBound.forEach(shape => {
-                switch (shape.type) {
-                    case 'rectangle': {
-                        const corners = getHandlePositions(shape);
-                        if (corners.tl) {
-                            [corners.tl, corners.tr, corners.bl, corners.br].forEach(p => {
-                                minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-                                maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
-                            });
-                        }
-                        break;
-                    }
-                    case 'line':
-                        minX = Math.min(minX, shape.x1, shape.x2); minY = Math.min(minY, shape.y1, shape.y2);
-                        maxX = Math.max(maxX, shape.x1, shape.x2); maxY = Math.max(maxY, shape.y1, shape.y2);
-                        break;
-                    case 'circle':
-                        const rX = shape.radiusX || shape.radius;
-                        const rY = shape.radiusY || shape.radius;
-                        minX = Math.min(minX, shape.cx - rX); minY = Math.min(minY, shape.cy - rY);
-                        maxX = Math.max(maxX, shape.cx + rX); maxY = Math.max(maxY, shape.cy + rY);
-                        break;
+                const handlePoints = getHandlePositions(shape);
+                let points = [];
+                if(shape.type === 'rectangle'){
+                    points = [handlePoints.tl, handlePoints.tr, handlePoints.bl, handlePoints.br];
+                } else if(shape.type === 'line'){
+                    points = [handlePoints.start, handlePoints.end];
+                } else if(shape.type === 'circle'){
+                     const { cx, cy, radiusX, radiusY, rotation = 0 } = shape;
+                     const rX = radiusX ?? radius;
+                     const rY = radiusY ?? radius;
+                     // Bounding box of a rotated ellipse is more complex, for simplicity, we use an approximation
+                     const cos = Math.abs(Math.cos(rotation));
+                     const sin = Math.abs(Math.sin(rotation));
+                     const w = rX * 2;
+                     const h = rY * 2;
+                     const boundWidth = w * cos + h * sin;
+                     const boundHeight = w * sin + h * cos;
+                     points = [
+                         { x: cx - boundWidth/2, y: cy - boundHeight/2 },
+                         { x: cx + boundWidth/2, y: cy + boundHeight/2 }
+                     ];
                 }
+                
+                points.forEach(p => {
+                    if(p){
+                        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+                        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+                    }
+                });
             });
             if (!isFinite(minX)) return null;
             return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
@@ -1080,13 +1093,33 @@
                 lastPanPoint = screenPos; 
                 requestMinimap();
             } else if (currentTool === 'select') {
-                if (isRotating) { rotateShape(worldPos.x, worldPos.y); }
-                else if (isResizing) { resizeShape(worldPos.x, worldPos.y); } 
-                else if (isDragging) { moveShape(worldPos.x, worldPos.y); } 
-                else if (isMultiSelecting) {
+                if (isRotating) { 
+                    rotateShape(worldPos.x, worldPos.y); 
+                } else if (isResizing) { 
+                    resizeShape(worldPos.x, worldPos.y); 
+                } else if (isDragging) {
+                    const dx = (screenPos.x - startX) / scale;
+                    const dy = (screenPos.y - startY) / scale;
+                    const startShapesMap = new Map(dragStart.shapes.map(s => [s.id, s]));
+                    selectedShapes.forEach(shape => {
+                        const startShape = startShapesMap.get(shape.id);
+                        if (!startShape) return;
+
+                        if (shape.type === 'line') {
+                            shape.x1 = startShape.x1 + dx; shape.y1 = startShape.y1 + dy;
+                            shape.x2 = startShape.x2 + dx; shape.y2 = startShape.y2 + dy;
+                        } else if (shape.type === 'circle') {
+                             shape.cx = startShape.cx + dx; shape.cy = startShape.cy + dy;
+                        } else {
+                            shape.x = startShape.x + dx; shape.y = startShape.y + dy;
+                        }
+                    });
+                } else if (isMultiSelecting) {
                     selectionBox.width = screenPos.x - selectionBox.x;
                     selectionBox.height = screenPos.y - selectionBox.y;
-                } else { updateCursor(worldPos.x, worldPos.y); }
+                } else { 
+                    updateCursor(worldPos.x, worldPos.y); 
+                }
             }
             if(isDrawing || isResizing || isDragging || isPanning || isRotating || isMultiSelecting) draw();
         });
@@ -1363,16 +1396,3 @@
     </script>
 </body>
 </html>
-", in the most up-to-date document and am asking a query about/based on this code below.
-Instructions to follow:
-  * Don't output/edit the document if the query is Direct/Simple. For example, if the query asks for a simple explanation, output a direct answer.
-  * Make sure to **edit** the document if the query shows the intent of editing the document, in which case output the entire edited document, **not just that section or the edits**.
-    * Don't output the same document/empty document and say that you have edited it.
-    * Don't change unrelated code in the document.
-  * Don't output  and  in your final response.
-  * Any references like "this" or "selected code" refers to the code between  and  tags.
-  * Just acknowledge my request in the introduction.
-  * Make sure to refer to the document as "Canvas" in your response.
-
-(actual user query begins now)
-현재는 사각형만 회전이 돼. 원형, 선도 회전이 되게 
