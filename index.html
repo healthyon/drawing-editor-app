@@ -136,7 +136,7 @@
 
         // --- Firebase State ---
         let db, auth, userId;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const appId = (typeof __app_id === 'string' && __app_id) ? __app_id : 'default-app-id';
         let debounceTimer;
 
         // --- Constants ---
@@ -160,7 +160,7 @@
         
         // --- Firestore & History Management ---
         async function saveShapesToFirestore() {
-            if (!isAppReady) return; 
+            if (!isAppReady || !userId) return; 
             
             saveStatus.textContent = '저장 중...';
             saveStatus.classList.remove('text-green-600', 'text-red-500');
@@ -371,7 +371,8 @@
             ctx.restore();
         }
         function drawSelection(shape) {
-            ctx.strokeStyle = '#2563eb'; ctx.fillStyle = '#2563eb';
+            ctx.strokeStyle = '#2563eb';
+            ctx.fillStyle = '#2563eb';
             ctx.lineWidth = 2 / scale;
             const handles = getHandlePositions(shape);
             const handleScreenSize = HANDLE_SIZE / scale;
@@ -379,11 +380,12 @@
             ctx.setLineDash([6 / scale, 3 / scale]);
             ctx.save();
             if (shape.type === 'rectangle') {
-                const centerX = shape.x + shape.width / 2;
-                const centerY = shape.y + shape.height / 2;
+                const { width, height } = shape;
+                const centerX = shape.x + width / 2;
+                const centerY = shape.y + height / 2;
                 ctx.translate(centerX, centerY);
                 ctx.rotate(shape.rotation || 0);
-                ctx.strokeRect(-shape.width / 2, -shape.height / 2, shape.width, shape.height);
+                ctx.strokeRect(-width / 2, -height / 2, width, height);
             } else if (shape.type === 'line') {
                 ctx.beginPath(); ctx.moveTo(shape.x1, shape.y1); ctx.lineTo(shape.x2, shape.y2); ctx.stroke();
             } else if (shape.type === 'circle') {
@@ -830,14 +832,15 @@
                 } else {
                     // Fallback for local development if the user provides the config
                     firebaseConfig = {
-                         apiKey: "AIzaSyCiKvn9Go7_ZOkYNbE-HcyVeJVQ3RZawzY",
-                         authDomain: "diary-8d162.firebaseapp.com",
-                         projectId: "diary-8d162",
-                         storageBucket: "diary-8d162.firebasestorage.app",
-                         messagingSenderId: "126822483970",
-                         appId: "1:126822483970:web:e24300963518f28db9ff1b"
+                         apiKey: "YOUR_API_KEY", // Replace with your actual API key
+                         authDomain: "drawing-editor-app.firebaseapp.com",
+                         projectId: "drawing-editor-app",
+                         storageBucket: "drawing-editor-app.appspot.com",
+                         messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // Replace with your actual Sender ID
+                         appId: "YOUR_APP_ID" // Replace with your actual App ID
                     };
-                    console.log("Using fallback Firebase config for local development.");
+                    console.warn("Using fallback Firebase config. Please replace placeholder values and ensure Anonymous Sign-in is enabled in your Firebase project.");
+                    showToast("Fallback Firebase config in use. Please check console.")
                 }
                 
                 const app = initializeApp(firebaseConfig);
@@ -862,9 +865,9 @@
                         } catch (signInError) {
                             console.error("Sign-in failed:", signInError);
                             isAppReady = true; 
-                            saveStatus.textContent = "인증 실패";
+                            saveStatus.textContent = "인증 실패 (로컬 모드)";
                             saveStatus.classList.add('text-red-500');
-                            showToast("Firebase 인증에 실패하여 로컬에서만 작업합니다.");
+                            showToast("Firebase 인증에 실패하여 로컬에서만 작업합니다. 콘솔에서 익명 로그인을 활성화했는지 확인해주세요.");
                         }
                     }
                 });
@@ -872,7 +875,7 @@
             } catch (e) {
                 console.error("Firebase initialization failed:", e);
                 isAppReady = true; // Allow local work even if firebase fails
-                saveStatus.textContent = "연결 실패";
+                saveStatus.textContent = "연결 실패 (로컬 모드)";
                 saveStatus.classList.remove('text-green-600', 'text-gray-500');
                 saveStatus.classList.add('text-red-500');
                 showToast("Firebase 연동에 실패했습니다. 로컬에서만 작업이 가능합니다.");
