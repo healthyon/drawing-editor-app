@@ -162,14 +162,13 @@
             if (!db || !userId || !dataLoaded) return; // Don't save if not ready or data not loaded yet
             
             saveStatus.textContent = '저장 중...';
-            saveStatus.classList.remove('text-green-600');
+            saveStatus.classList.remove('text-green-600', 'text-red-500');
             saveStatus.classList.add('text-gray-500');
 
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(async () => {
                 try {
                     const docRef = doc(db, 'artifacts', appId, 'users', userId, 'drawings', 'main');
-                    // Store shapes as a stringified JSON to handle potential Firestore nesting issues
                     await setDoc(docRef, { data: JSON.stringify(shapes) });
                     saveStatus.textContent = '모든 변경사항이 저장됨';
                     saveStatus.classList.remove('text-gray-500');
@@ -727,25 +726,32 @@
             onSnapshot(docRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const cloudData = docSnap.data().data;
-                    if (cloudData) {
-                       shapes = JSON.parse(cloudData);
+                    if (cloudData && dataLoaded === false) { // Only load from cloud once on initial setup
+                       try {
+                           const parsedShapes = JSON.parse(cloudData);
+                           if (Array.isArray(parsedShapes)) {
+                               shapes = parsedShapes;
+                           }
+                       } catch (e) {
+                           console.error("Failed to parse shapes from Firestore:", e);
+                           shapes = [];
+                       }
                     }
                 } else {
-                    // No existing data, start fresh
                     shapes = [];
                     console.log("No drawing found, starting new.");
                 }
 
-                // Set initial state for history
-                history = [JSON.parse(JSON.stringify(shapes))];
-                historyIndex = 0;
-                updateHistoryButtons();
-
-                draw();
-                showToast('클라우드에서 도면을 불러왔습니다.');
-                saveStatus.textContent = '최신 상태';
-                saveStatus.classList.add('text-green-600');
-                dataLoaded = true;
+                if (!dataLoaded) {
+                    history = [JSON.parse(JSON.stringify(shapes))];
+                    historyIndex = 0;
+                    updateHistoryButtons();
+                    draw();
+                    showToast('클라우드에서 도면을 불러왔습니다.');
+                    saveStatus.textContent = '최신 상태';
+                    saveStatus.classList.add('text-green-600');
+                    dataLoaded = true;
+                }
             }, (error) => {
                 console.error("Error listening to Firestore:", error);
                 showToast('데이터 동기화에 실패했습니다.');
@@ -755,37 +761,48 @@
         }
 
         async function init() {
+            resizeCanvas(); 
+            setActiveTool('select'); 
+            
             try {
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const firebaseConfigString = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
+                if (firebaseConfigString === '{}' || !firebaseConfigString) {
+                    throw new Error("Firebase config is missing from the environment.");
+                }
+
+                const firebaseConfig = JSON.parse(firebaseConfigString);
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                onAuthStateChanged(auth, async (user) => {
+                onAuthStateChanged(auth, (user) => {
                     if (user) {
+                        console.log("Authentication state changed: User is signed in.", user.uid);
                         userId = user.uid;
-                        await setupFirestoreListener();
+                        setupFirestoreListener();
                     } else {
-                        // Not signed in, try to sign in
-                        const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                        if (token) {
-                            await signInWithCustomToken(auth, token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
+                        console.log("Authentication state changed: User is signed out.");
+                        saveStatus.textContent = "로그인 필요";
+                        saveStatus.classList.add('text-red-500');
                     }
                 });
+
+                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (token) {
+                    await signInWithCustomToken(auth, token);
+                } else {
+                    await signInAnonymously(auth);
+                }
             } catch (e) {
-                console.error("Firebase initialization failed:", e);
-                saveStatus.textContent = "인증 실패";
+                console.error("Firebase initialization or authentication failed:", e);
+                saveStatus.textContent = "인증/연결 실패";
+                saveStatus.classList.remove('text-green-600', 'text-gray-500');
+                saveStatus.classList.add('text-red-500');
                 showToast("Firebase 연동에 실패했습니다. 일부 기능이 제한될 수 있습니다.");
             }
-            
-            resizeCanvas(); 
-            setActiveTool('select'); 
         }
 
         init();
     </script>
 </body>
-</html>\
+</ht
