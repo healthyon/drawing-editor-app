@@ -40,6 +40,10 @@
         #saveStatus {
             transition: color 0.5s ease-in-out;
         }
+        #minimap-container {
+            transition: opacity 0.3s ease-in-out;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -48,41 +52,32 @@
         <canvas id="drawingCanvas"></canvas>
     </div>
 
-    <div class="absolute top-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-lg">
-        <div class="flex items-center justify-between">
+    <div class="absolute top-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm p-3 rounded-xl shadow-lg">
+        <div class="flex items-center justify-between w-full">
+            <!-- Left Section: Title and Status -->
             <div class="flex items-center space-x-4">
-                 <h1 class="text-xl font-bold text-gray-800">한성헬시온 도면 편집기</h1>
+                 <h1 class="text-xl font-bold text-gray-800">도면 편집기</h1>
                  <span id="saveStatus" class="text-sm text-gray-500">초기화 중...</span>
             </div>
-            <div class="flex items-center space-x-2">
-                <div class="flex items-center mr-4">
-                    <input type="checkbox" id="showDimensionsToggle" class="h-4 w-4 rounded border-gray-300 text-blue-600" checked>
-                    <label for="showDimensionsToggle" class="ml-2 block text-sm font-medium text-gray-700">치수 표시</label>
-                </div>
-                <label class="text-sm font-medium text-gray-700">배율:</label>
-                <button id="zoomOutBtn" class="bg-gray-200 w-8 h-8 rounded-full font-bold">-</button>
-                <span id="zoomLevelDisplay" class="text-sm font-semibold w-16 text-center">100%</span>
-                <button id="zoomInBtn" class="bg-gray-200 w-8 h-8 rounded-full font-bold">+</button>
-                <button id="zoomResetBtn" class="bg-gray-200 py-2 px-3 rounded-md text-sm">초기화</button>
-            </div>
-        </div>
-        <hr class="my-3 border-gray-200">
-        <div class="flex items-center space-x-2 flex-wrap gap-2">
-             <label class="text-sm font-medium text-gray-700">파일:</label>
-                <button id="localSaveBtn" title="로컬에 저장" class="tool-btn bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-md">
+
+            <!-- Center Section: Tools -->
+            <div class="flex-grow flex justify-center items-center space-x-1">
+                <label class="text-sm font-medium text-gray-700">파일:</label>
+                <button id="localSaveBtn" title="로컬에 저장" class="tool-btn bg-gray-200 hover:bg-gray-300 p-2 rounded-md">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                 </button>
-                <button id="localLoadBtn" title="로컬에서 불러오기" class="tool-btn bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-md">
+                <button id="localLoadBtn" title="로컬에서 불러오기" class="tool-btn bg-gray-200 hover:bg-gray-300 p-2 rounded-md">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v-8.586a1 1 0 01.293-.707l8.414-8.414a1 1 0 01.707-.293H19a2 2 0 012 2v16a2 2 0 01-2 2H6a2 2 0 01-2-2v-1m10-9l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                 </button>
-                <button id="printBtn" title="인쇄하기" class="tool-btn bg-sky-500 hover:bg-sky-600 text-white p-2 rounded-md">
+                <button id="printBtn" title="인쇄하기" class="tool-btn bg-gray-200 hover:bg-gray-300 p-2 rounded-md">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3h10V4H5zm10 5H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2zM9 15a1 1 0 11-2 0 1 1 0 012 0zm4 0a1 1 0 11-2 0 1 1 0 012 0z" clip-rule="evenodd"></path><path d="M6 1a1 1 0 00-1 1v1h10V2a1 1 0 00-1-1H6z"></path></svg>
                 </button>
-                <label class="text-sm font-medium text-gray-700 ml-4">편집:</label>
+                <div class="border-l border-gray-300 h-6 mx-2"></div>
+                <label class="text-sm font-medium text-gray-700">편집:</label>
                 <button id="undoBtn" title="뒤로가기 (Ctrl+Z)" class="tool-btn bg-gray-200 hover:bg-gray-300 p-2 rounded-md">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
                 </button>
@@ -92,20 +87,39 @@
                 <button id="deleteShapeBtn" title="선택 삭제 (Delete)" class="tool-btn bg-red-500 hover:bg-red-600 text-white p-2 rounded-md">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
                 </button>
-                <div class="border-l border-gray-300 h-8 mx-2"></div>
+                <div class="border-l border-gray-300 h-6 mx-2"></div>
                 <label class="text-sm font-medium text-gray-700">도구:</label>
                 <button id="tool-select" class="tool-btn py-2 px-4 rounded-md">선택/이동</button>
                 <button id="tool-rectangle" class="tool-btn py-2 px-4 rounded-md">사각형</button>
                 <button id="tool-line" class="tool-btn py-2 px-4 rounded-md">선</button>
                 <button id="tool-circle" class="tool-btn py-2 px-4 rounded-md">원</button>
+            </div>
+
+            <!-- Right Section: View Controls -->
+            <div class="flex items-center space-x-2">
+                <div class="flex items-center">
+                    <input type="checkbox" id="showDimensionsToggle" class="h-4 w-4 rounded border-gray-300 text-blue-600" checked>
+                    <label for="showDimensionsToggle" class="ml-2 block text-sm font-medium text-gray-700">치수 표시</label>
+                </div>
+                 <div class="border-l border-gray-300 h-6 mx-2"></div>
+                <label class="text-sm font-medium text-gray-700">배율:</label>
+                <button id="zoomOutBtn" class="bg-gray-200 w-8 h-8 rounded-full font-bold">-</button>
+                <span id="zoomLevelDisplay" class="text-sm font-semibold w-16 text-center">100%</span>
+                <button id="zoomInBtn" class="bg-gray-200 w-8 h-8 rounded-full font-bold">+</button>
+                <button id="zoomResetBtn" class="bg-gray-200 py-2 px-3 rounded-md text-sm">초기화</button>
+            </div>
         </div>
     </div>
     
-    <div id="inspector" class="absolute top-[160px] right-4 w-64 bg-white/80 backdrop-blur-sm p-4 rounded-xl border z-10 hidden">
+    <div id="inspector" class="absolute top-[80px] right-4 w-64 bg-white/80 backdrop-blur-sm p-4 rounded-xl border z-10 hidden">
         <h3 class="font-bold text-lg mb-4">상세 정보</h3>
         <div id="inspector-content">
             <p class="text-gray-500 text-sm">수정할 도형을 선택하세요.</p>
         </div>
+    </div>
+    
+    <div id="minimap-container" class="absolute bottom-4 right-4 w-48 h-36 bg-white/80 backdrop-blur-sm p-1 rounded-lg border-2 border-blue-300 shadow-lg opacity-0 pointer-events-none z-20">
+        <canvas id="minimapCanvas"></canvas>
     </div>
 
     <div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-xs bg-black/40 px-3 py-1.5 rounded-full z-10">
@@ -130,10 +144,13 @@
         const printBtn = document.getElementById('printBtn'), localSaveBtn = document.getElementById('localSaveBtn'), localLoadBtn = document.getElementById('localLoadBtn');
         const undoBtn = document.getElementById('undoBtn'), redoBtn = document.getElementById('redoBtn');
         const saveStatus = document.getElementById('saveStatus');
+        const minimapContainer = document.getElementById('minimap-container');
+        const minimapCanvas = document.getElementById('minimapCanvas');
 
         // --- State Management ---
         let shapes = [], selectedShapes = [], currentTool = 'select';
         let isDrawing = false, isDragging = false, isResizing = false, isPanning = false, isRotating = false, isShiftDown = false, isMultiSelecting = false;
+        let isPanningMinimap = false;
         let resizeHandle = null, startX, startY, endX, endY, lastPanPoint = { x: 0, y: 0 };
         let dragStart = { mouse: {}, shapes: [] };
         let selectionBox = {};
@@ -143,7 +160,8 @@
         let history = [];
         let historyIndex = -1;
         let dataLoaded = false;
-        let isAppReady = false; // Flag to prevent interaction until app is synced
+        let isAppReady = false; 
+        let minimapTimer;
 
         // --- Firebase State ---
         let db, auth, userId;
@@ -152,7 +170,7 @@
 
         // --- Constants ---
         const MIN_SCALE = 0.1, MAX_SCALE = 10.0;
-        const HANDLE_SIZE = 8, MIN_SHAPE_SIZE = 10, LINE_SELECT_TOLERANCE = 5, PIXELS_PER_METER = 500, ROTATE_HANDLE_OFFSET = 30;
+        const HANDLE_SIZE = 8, MIN_SHAPE_SIZE = 10, LINE_SELECT_TOLERANCE = 5, PIXELS_PER_METER = 80, ROTATE_HANDLE_OFFSET = 30;
 
         // --- Utility & Viewport Functions ---
         function showToast(message) { toast.textContent = message; toast.classList.add('show'); setTimeout(() => { toast.classList.remove('show'); }, 3000); }
@@ -166,7 +184,9 @@
             scale = Math.max(MIN_SCALE, Math.min(newScale, MAX_SCALE));
             viewOffsetX = centerX - worldPosBeforeZoom.x * scale;
             viewOffsetY = centerY - worldPosBeforeZoom.y * scale;
-            updateZoomDisplay(); draw();
+            updateZoomDisplay(); 
+            requestMinimap();
+            draw();
         }
         
         // --- Firestore & History Management ---
@@ -191,7 +211,7 @@
                     saveStatus.classList.add('text-red-500');
                     showToast('클라우드 저장에 실패했습니다.');
                 }
-            }, 1000); // 1-second debounce
+            }, 1000);
         }
         
         function saveState() {
@@ -263,7 +283,10 @@
                                    <div><label class="text-sm font-medium">회전 (°)</label><input type="number" id="inspector-rotation" class="inspector-input" value="${angle.toFixed(1)}"></div>`;
                         break;
                     case 'circle':
-                         content += `<div><label class="text-sm font-medium">지름 (m)</label><input type="number" step="0.1" id="inspector-diameter" class="inspector-input" value="${(selectedShape.radius * 2 / PIXELS_PER_METER).toFixed(2)}"></div>`;
+                         const rX = selectedShape.radiusX || selectedShape.radius;
+                         const rY = selectedShape.radiusY || selectedShape.radius;
+                         content += `<div><label class="text-sm font-medium">가로 지름 (m)</label><input type="number" step="0.1" id="inspector-diameterX" class="inspector-input" value="${(rX * 2 / PIXELS_PER_METER).toFixed(2)}"></div>
+                                    <div><label class="text-sm font-medium">세로 지름 (m)</label><input type="number" step="0.1" id="inspector-diameterY" class="inspector-input" value="${(rY * 2 / PIXELS_PER_METER).toFixed(2)}"></div>`;
                         break;
                 }
                 content += `<div><label class="text-sm font-medium">선 두께</label><input type="number" id="inspector-line-width" class="inspector-input" value="${selectedShape.lineWidth || 1}" min="1"></div>
@@ -305,7 +328,8 @@
                  }
             });
             document.getElementById('inspector-length')?.addEventListener('change', e => { if (selectedShape) { const newLength = parseFloat(e.target.value) * PIXELS_PER_METER; const angle = Math.atan2(selectedShape.y2 - selectedShape.y1, selectedShape.x2 - selectedShape.x1); selectedShape.x2 = selectedShape.x1 + newLength * Math.cos(angle); selectedShape.y2 = selectedShape.y1 + newLength * Math.sin(angle); saveOnChange(); } });
-            document.getElementById('inspector-diameter')?.addEventListener('change', e => { if (selectedShape) { selectedShape.radius = parseFloat(e.target.value) * PIXELS_PER_METER / 2; saveOnChange(); } });
+            document.getElementById('inspector-diameterX')?.addEventListener('change', e => { if (selectedShape) { selectedShape.radiusX = parseFloat(e.target.value) * PIXELS_PER_METER / 2; saveOnChange(); } });
+            document.getElementById('inspector-diameterY')?.addEventListener('change', e => { if (selectedShape) { selectedShape.radiusY = parseFloat(e.target.value) * PIXELS_PER_METER / 2; saveOnChange(); } });
             document.getElementById('inspector-line-width')?.addEventListener('change', e => { if (selectedShape) { const newWidth = parseFloat(e.target.value); selectedShape.lineWidth = newWidth; currentStyle.lineWidth = newWidth; saveOnChange(); } });
             document.getElementById('inspector-stroke-color')?.addEventListener('input', e => { if (selectedShape) { selectedShape.strokeColor = e.target.value; currentStyle.strokeColor = e.target.value; saveOnChange(); } });
             document.getElementById('inspector-fill-color')?.addEventListener('input', e => { if (selectedShape) { selectedShape.fillColor = e.target.value; currentStyle.fillColor = e.target.value; saveOnChange(); } });
@@ -315,7 +339,13 @@
         showDimensionsToggle.addEventListener('change', (e) => { showDimensions = e.target.checked; draw(); });
 
         // --- Drawing Functions ---
-        function resizeCanvas() { canvas.width = canvasContainer.clientWidth; canvas.height = canvasContainer.clientHeight; draw(); }
+        function resizeCanvas() {
+            canvas.width = canvasContainer.clientWidth;
+            canvas.height = canvasContainer.clientHeight;
+            minimapCanvas.width = minimapContainer.clientWidth;
+            minimapCanvas.height = minimapContainer.clientHeight;
+            draw(); 
+        }
         
         function draw() {
             ctx.save();
@@ -335,19 +365,53 @@
                 selectedShapes.forEach(shape => drawSelection(shape));
             }
             if (isDrawing) {
-                const worldStart = getWorldPos({x: startX, y: startY});
-                const worldEnd = getWorldPos({x: endX, y: endY});
+                let worldStart = getWorldPos({x: startX, y: startY});
+                let worldEnd = getWorldPos({x: endX, y: endY});
+                
+                if (isShiftDown && currentTool === 'circle') {
+                    const dx = worldEnd.x - worldStart.x;
+                    const dy = worldEnd.y - worldStart.y;
+                    const side = Math.max(Math.abs(dx), Math.abs(dy));
+                    worldEnd.x = worldStart.x + side * Math.sign(dx);
+                    worldEnd.y = worldStart.y + side * Math.sign(dy);
+                }
+
                 ctx.save();
                 ctx.globalAlpha = 0.6; ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2 / scale; ctx.setLineDash([5 / scale, 5 / scale]);
                 const previewShape = { strokeColor: '#3b82f6', fillColor: '#bfdbfe', lineWidth: 2, rotation: 0 };
                 if (currentTool === 'rectangle') {
+                     if (isShiftDown) {
+                        const dx = worldEnd.x - worldStart.x;
+                        const dy = worldEnd.y - worldStart.y;
+                        const size = Math.max(Math.abs(dx), Math.abs(dy));
+                        worldEnd.x = worldStart.x + size * Math.sign(dx);
+                        worldEnd.y = worldStart.y + size * Math.sign(dy);
+                    }
                     Object.assign(previewShape, { x: Math.min(worldStart.x, worldEnd.x), y: Math.min(worldStart.y, worldEnd.y), width: Math.abs(worldStart.x - worldEnd.x), height: Math.abs(worldStart.y - worldEnd.y) });
                     drawRectangle(previewShape);
                 } else if (currentTool === 'line') {
+                    if (isShiftDown) {
+                        const dx = worldEnd.x - worldStart.x;
+                        const dy = worldEnd.y - worldStart.y;
+                        const length = Math.hypot(dx, dy);
+                        let angle = Math.atan2(dy, dx);
+                        const snapAngle = Math.PI / 4; // 45 degrees
+                        angle = Math.round(angle / snapAngle) * snapAngle;
+                        worldEnd.x = worldStart.x + length * Math.cos(angle);
+                        worldEnd.y = worldStart.y + length * Math.sin(angle);
+                    }
                     Object.assign(previewShape, { x1: worldStart.x, y1: worldStart.y, x2: worldEnd.x, y2: worldEnd.y });
                     drawLine(previewShape);
                 } else if (currentTool === 'circle') {
-                    Object.assign(previewShape, { cx: worldStart.x, cy: worldStart.y, radius: Math.hypot(worldEnd.x - worldStart.x, worldEnd.y - worldStart.y) });
+                    const dx = worldEnd.x - worldStart.x;
+                    const dy = worldEnd.y - worldStart.y;
+                    Object.assign(previewShape, {
+                        type: 'circle',
+                        cx: worldStart.x + dx / 2,
+                        cy: worldStart.y + dy / 2,
+                        radiusX: Math.abs(dx) / 2,
+                        radiusY: Math.abs(dy) / 2,
+                    });
                     drawCircle(previewShape);
                 }
                 ctx.restore();
@@ -361,7 +425,100 @@
                 ctx.restore();
             }
             ctx.restore();
+
+            if (!minimapContainer.classList.contains('hidden')) {
+                drawMinimap();
+            }
         }
+        
+        function requestMinimap() {
+            minimapContainer.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+            clearTimeout(minimapTimer);
+            minimapTimer = setTimeout(() => {
+                minimapContainer.classList.add('opacity-0', 'pointer-events-none');
+            }, 2000); 
+        }
+
+        function drawMinimap() {
+            const minimapCtx = minimapCanvas.getContext('2d');
+            const minimapWidth = minimapCanvas.width;
+            const minimapHeight = minimapCanvas.height;
+
+            minimapCtx.clearRect(0, 0, minimapWidth, minimapHeight);
+            minimapCtx.fillStyle = 'rgba(249, 250, 251, 0.8)';
+            minimapCtx.fillRect(0, 0, minimapWidth, minimapHeight);
+            minimapCtx.strokeStyle = 'rgba(209, 213, 219, 1)';
+            minimapCtx.strokeRect(0.5, 0.5, minimapWidth-1, minimapHeight-1);
+
+            const allShapesBbox = calculateBoundingBox(shapes);
+            if (!allShapesBbox || allShapesBbox.width <= 0 || allShapesBbox.height <= 0) {
+                return;
+            }
+
+            const padding = 10;
+            const drawAreaWidth = minimapWidth - padding * 2;
+            const drawAreaHeight = minimapHeight - padding * 2;
+
+            const minimapScale = Math.min(drawAreaWidth / allShapesBbox.width, drawAreaHeight / allShapesBbox.height);
+            const offsetX = (minimapWidth - allShapesBbox.width * minimapScale) / 2;
+            const offsetY = (minimapHeight - allShapesBbox.height * minimapScale) / 2;
+
+            minimapCtx.save();
+            minimapCtx.translate(offsetX, offsetY);
+            minimapCtx.scale(minimapScale, minimapScale);
+            minimapCtx.translate(-allShapesBbox.x, -allShapesBbox.y);
+
+            shapes.forEach(shape => {
+                 minimapCtx.save();
+                switch (shape.type) {
+                    case 'rectangle':
+                        const { x, y, width, height, rotation = 0, strokeColor, fillColor } = shape;
+                        minimapCtx.strokeStyle = strokeColor;
+                        minimapCtx.fillStyle = fillColor;
+                        minimapCtx.lineWidth = 2 / minimapScale;
+                        minimapCtx.translate(x + width / 2, y + height / 2);
+                        minimapCtx.rotate(rotation);
+                        minimapCtx.fillRect(-width / 2, -height / 2, width, height);
+                        minimapCtx.strokeRect(-width / 2, -height / 2, width, height);
+                        break;
+                    case 'line':
+                        minimapCtx.strokeStyle = shape.strokeColor;
+                        minimapCtx.lineWidth = 2 / minimapScale;
+                        minimapCtx.beginPath();
+                        minimapCtx.moveTo(shape.x1, shape.y1);
+                        minimapCtx.lineTo(shape.x2, shape.y2);
+                        minimapCtx.stroke();
+                        break;
+                    case 'circle':
+                        minimapCtx.strokeStyle = shape.strokeColor;
+                        minimapCtx.fillStyle = shape.fillColor;
+                        minimapCtx.lineWidth = 2 / minimapScale;
+                        const rX = shape.radiusX || shape.radius;
+                        const rY = shape.radiusY || shape.radius;
+                        minimapCtx.beginPath();
+                        minimapCtx.ellipse(shape.cx, shape.cy, rX, rY, shape.rotation || 0, 0, Math.PI * 2);
+                        minimapCtx.fill();
+                        minimapCtx.stroke();
+                        break;
+                }
+                minimapCtx.restore();
+            });
+
+            const viewRectWorld = {
+                x: -viewOffsetX / scale,
+                y: -viewOffsetY / scale,
+                width: canvas.width / scale,
+                height: canvas.height / scale
+            };
+            minimapCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+            minimapCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            minimapCtx.lineWidth = 2 / minimapScale;
+            minimapCtx.fillRect(viewRectWorld.x, viewRectWorld.y, viewRectWorld.width, viewRectWorld.height);
+            minimapCtx.strokeRect(viewRectWorld.x, viewRectWorld.y, viewRectWorld.width, viewRectWorld.height);
+            
+            minimapCtx.restore();
+        }
+
 
         function drawRectangle(shape) {
             const { x, y, width, height, fillColor, strokeColor, lineWidth, name, rotation = 0 } = shape;
@@ -387,12 +544,35 @@
             if (showDimensions && shape.id) { const length = Math.hypot(x2 - x1, y2 - y1); const angle = Math.atan2(y2 - y1, x2 - x1); drawDimensionText(`${(length / PIXELS_PER_METER).toFixed(2)} m`, (x1 + x2) / 2, (y1 + y2) / 2, angle); }
         }
         function drawCircle(shape) {
-            const { cx, cy, radius, fillColor, strokeColor, lineWidth, name } = shape;
-            ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            ctx.fillStyle = fillColor; ctx.fill();
-            ctx.strokeStyle = strokeColor; ctx.lineWidth = (lineWidth || 1) / scale; ctx.stroke();
-            if (name) drawName(name, cx, cy);
-            if (showDimensions && shape.id) { const diameterM = (radius * 2 / PIXELS_PER_METER).toFixed(2); ctx.beginPath(); ctx.moveTo(cx - radius, cy); ctx.lineTo(cx + radius, cy); ctx.strokeStyle = '#c2410c'; ctx.lineWidth = 1 / scale; ctx.setLineDash([2/scale, 2/scale]); ctx.stroke(); ctx.setLineDash([]); drawDimensionText(`Ø ${diameterM} m`, cx, cy); }
+            const { cx, cy, radius, radiusX, radiusY, fillColor, strokeColor, lineWidth, name, rotation = 0 } = shape;
+            const rX = radiusX === undefined ? radius : radiusX;
+            const rY = radiusY === undefined ? radius : radiusY;
+
+            ctx.save();
+            ctx.translate(cx, cy); 
+            ctx.rotate(rotation);
+            ctx.beginPath(); 
+            ctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI * 2);
+            ctx.fillStyle = fillColor; 
+            ctx.fill();
+            ctx.strokeStyle = strokeColor; 
+            ctx.lineWidth = (lineWidth || 1) / scale; 
+            ctx.stroke();
+            ctx.restore();
+            
+            if (name) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(rotation);
+                drawName(name, 0, 0);
+                ctx.restore();
+            }
+            if (showDimensions && shape.id) { 
+                const diameterX = (rX * 2 / PIXELS_PER_METER).toFixed(2);
+                const diameterY = (rY * 2 / PIXELS_PER_METER).toFixed(2);
+                drawDimensionText(`↔ ${diameterX} m`, cx, cy, rotation);
+                drawDimensionText(`↕ ${diameterY} m`, cx, cy + (15/scale), rotation);
+            }
         }
         function drawName(name, x, y) { ctx.save(); ctx.fillStyle = '#111827'; ctx.font = `bold ${14 / scale}px "Noto Sans KR"`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(name, x, y); ctx.restore(); }
         function drawDimensionText(text, x, y, angle = 0) {
@@ -422,7 +602,14 @@
             } else if (shape.type === 'line') {
                 ctx.beginPath(); ctx.moveTo(shape.x1, shape.y1); ctx.lineTo(shape.x2, shape.y2); ctx.stroke();
             } else if (shape.type === 'circle') {
-                ctx.beginPath(); ctx.arc(shape.cx, shape.cy, shape.radius, 0, Math.PI * 2); ctx.stroke();
+                const { cx, cy, radius, radiusX, radiusY, rotation = 0 } = shape;
+                const rX = radiusX === undefined ? radius : radiusX;
+                const rY = radiusY === undefined ? radius : radiusY;
+                ctx.translate(cx, cy);
+                ctx.rotate(rotation);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI * 2);
+                ctx.stroke();
             }
             ctx.restore();
             ctx.setLineDash([]);
@@ -474,7 +661,19 @@
                     return distSq({x: mx, y: my}, {x: x1, y: y1}, {x: x2, y: y2}) < tolerance**2;
                 }
                 case 'circle': {
-                     return Math.hypot(mx - shape.cx, my - shape.cy) <= shape.radius;
+                    const { cx, cy, radius, radiusX, radiusY, rotation = 0 } = shape;
+                    const rX = radiusX === undefined ? radius : radiusX;
+                    const rY = radiusY === undefined ? radius : radiusY;
+                    if (!rX || !rY) return false;
+
+                    const dx = mx - cx;
+                    const dy = my - cy;
+                    const cos = Math.cos(-rotation);
+                    const sin = Math.sin(-rotation);
+                    const rotatedX = dx * cos - dy * sin;
+                    const rotatedY = dx * sin + dy * cos;
+                    
+                    return (rotatedX**2 / rX**2) + (rotatedY**2 / rY**2) <= 1;
                 }
             }
             return false;
@@ -511,7 +710,23 @@
                     rot: { x: cx + (ROTATE_HANDLE_OFFSET / scale) * Math.cos(perpAngle), y: cy + (ROTATE_HANDLE_OFFSET / scale) * Math.sin(perpAngle)}
                 };
             } else if (shape.type === 'circle') {
-                return { n: {x: shape.cx, y: shape.cy - shape.radius}, s: {x: shape.cx, y: shape.cy + shape.radius}, w: {x: shape.cx - shape.radius, y: shape.cy}, e: { x: shape.cx + shape.radius, y: shape.cy } };
+                const { cx, cy, radius, radiusX, radiusY, rotation = 0 } = shape;
+                const rX = radiusX === undefined ? radius : radiusX;
+                const rY = radiusY === undefined ? radius : radiusY;
+                
+                const unrotatedHandles = {
+                    n: { x: 0, y: -rY }, s: { x: 0, y: rY },
+                    w: { x: -rX, y: 0 }, e: { x: rX, y: 0 }
+                };
+                const rotatedHandles = {};
+                 for(const name in unrotatedHandles) {
+                    const pos = unrotatedHandles[name];
+                    rotatedHandles[name] = {
+                        x: (pos.x * Math.cos(rotation) - pos.y * Math.sin(rotation)) + cx,
+                        y: (pos.x * Math.sin(rotation) + pos.y * Math.cos(rotation)) + cy
+                    };
+                }
+                return rotatedHandles;
             }
             return {};
         }
@@ -572,8 +787,25 @@
                 if (resizeHandle === 'start') { selectedShape.x1 = newMx; selectedShape.y1 = newMy; } 
                 else { selectedShape.x2 = newMx; selectedShape.y2 = newMy; }
             } else if (selectedShape.type === 'circle') {
-                 const dist = Math.hypot(mx - selectedShape.cx, my - selectedShape.cy);
-                 selectedShape.radius = Math.max(minSize/2, dist);
+                const dx = mx - selectedShape.cx;
+                const dy = my - selectedShape.cy;
+                let newRadiusX = selectedShape.radiusX;
+                let newRadiusY = selectedShape.radiusY;
+
+                switch(resizeHandle) {
+                    case 'n':
+                    case 's':
+                        newRadiusY = Math.abs(dy);
+                        if (isShiftDown) newRadiusX = newRadiusY;
+                        break;
+                    case 'e':
+                    case 'w':
+                        newRadiusX = Math.abs(dx);
+                        if (isShiftDown) newRadiusY = newRadiusX;
+                        break;
+                }
+                selectedShape.radiusX = newRadiusX;
+                selectedShape.radiusY = newRadiusY;
             }
         }
         function rotateShape(mx, my) {
@@ -639,8 +871,10 @@
                         maxX = Math.max(maxX, shape.x1, shape.x2); maxY = Math.max(maxY, shape.y1, shape.y2);
                         break;
                     case 'circle':
-                        minX = Math.min(minX, shape.cx - shape.radius); minY = Math.min(minY, shape.cy - shape.radius);
-                        maxX = Math.max(maxX, shape.cx + shape.radius); maxY = Math.max(maxY, shape.cy + shape.radius);
+                        const rX = shape.radiusX || shape.radius;
+                        const rY = shape.radiusY || shape.radius;
+                        minX = Math.min(minX, shape.cx - rX); minY = Math.min(minY, shape.cy - rY);
+                        maxX = Math.max(maxX, shape.cx + rX); maxY = Math.max(maxY, shape.cy + rY);
                         break;
                 }
             });
@@ -844,6 +1078,7 @@
                 viewOffsetX += screenPos.x - lastPanPoint.x; 
                 viewOffsetY += screenPos.y - lastPanPoint.y; 
                 lastPanPoint = screenPos; 
+                requestMinimap();
             } else if (currentTool === 'select') {
                 if (isRotating) { rotateShape(worldPos.x, worldPos.y); }
                 else if (isResizing) { resizeShape(worldPos.x, worldPos.y); } 
@@ -866,13 +1101,32 @@
                 updateCursor(getWorldPos(getScreenPos(e)).x, getWorldPos(getScreenPos(e)).y);
             } else if (isDrawing) {
                 shapeDrawn = true;
-                const worldStart = getWorldPos({ x: startX, y: startY });
-                const worldEnd = getWorldPos(getScreenPos(e));
+                let worldStart = getWorldPos({ x: startX, y: startY });
+                let worldEnd = getWorldPos(getScreenPos(e));
                 let newShape = null;
+
+                if (isShiftDown) {
+                     if (currentTool === 'rectangle' || currentTool === 'circle') {
+                        const dx = worldEnd.x - worldStart.x;
+                        const dy = worldEnd.y - worldStart.y;
+                        const size = Math.max(Math.abs(dx), Math.abs(dy));
+                        worldEnd.x = worldStart.x + size * Math.sign(dx);
+                        worldEnd.y = worldStart.y + size * Math.sign(dy);
+                    } else if (currentTool === 'line') {
+                        const dx = worldEnd.x - worldStart.x;
+                        const dy = worldEnd.y - worldStart.y;
+                        const length = Math.hypot(dx, dy);
+                        let angle = Math.atan2(dy, dx);
+                        const snapAngle = Math.PI / 4; // 45 degrees
+                        angle = Math.round(angle / snapAngle) * snapAngle;
+                        worldEnd.x = worldStart.x + length * Math.cos(angle);
+                        worldEnd.y = worldStart.y + length * Math.sin(angle);
+                    }
+                }
 
                 switch (currentTool) {
                     case 'rectangle':
-                        if (Math.abs(worldStart.x - worldEnd.x) > MIN_SHAPE_SIZE / scale && Math.abs(worldStart.y - worldEnd.y) > MIN_SHAPE_SIZE / scale) {
+                        if (Math.abs(worldEnd.x - worldStart.x) > MIN_SHAPE_SIZE / scale && Math.abs(worldEnd.y - worldStart.y) > MIN_SHAPE_SIZE / scale) {
                             newShape = { id: Date.now(), ...currentStyle, rotation: 0 };
                             Object.assign(newShape, { type: 'rectangle', name: '사각형', x: Math.min(worldStart.x, worldEnd.x), y: Math.min(worldStart.y, worldEnd.y), width: Math.abs(worldStart.x - worldEnd.x), height: Math.abs(worldStart.y - worldEnd.y) });
                             shapes.push(newShape);
@@ -884,10 +1138,18 @@
                         shapes.push(newShape);
                         break;
                     case 'circle':
-                        const radius = Math.hypot(worldEnd.x - worldStart.x, worldEnd.y - worldStart.y);
-                        if (radius > MIN_SHAPE_SIZE / 2 / scale) {
+                        const dx = worldEnd.x - worldStart.x;
+                        const dy = worldEnd.y - worldStart.y;
+                        if (Math.abs(dx) > MIN_SHAPE_SIZE / scale && Math.abs(dy) > MIN_SHAPE_SIZE / scale) {
                             newShape = { id: Date.now(), ...currentStyle, rotation: 0 };
-                            Object.assign(newShape, { type: 'circle', name: '원', cx: worldStart.x, cy: worldStart.y, radius: radius });
+                            Object.assign(newShape, { 
+                                type: 'circle', 
+                                name: '원', 
+                                cx: worldStart.x + dx / 2, 
+                                cy: worldStart.y + dy / 2, 
+                                radiusX: Math.abs(dx) / 2, 
+                                radiusY: Math.abs(dy) / 2 
+                            });
                             shapes.push(newShape);
                         }
                         break;
@@ -941,6 +1203,52 @@
                 } 
             } 
         });
+
+        // --- Minimap Navigation ---
+        function handleMinimapNavigation(e) {
+            if (!isAppReady) return;
+            const allShapesBbox = calculateBoundingBox(shapes);
+            if (!allShapesBbox) return;
+
+            const minimapRect = minimapCanvas.getBoundingClientRect();
+            const minimapMouseX = e.clientX - minimapRect.left;
+            const minimapMouseY = e.clientY - minimapRect.top;
+
+            const padding = 10;
+            const drawAreaWidth = minimapCanvas.width - padding * 2;
+            const drawAreaHeight = minimapCanvas.height - padding * 2;
+
+            const minimapScale = Math.min(drawAreaWidth / allShapesBbox.width, drawAreaHeight / allShapesBbox.height);
+            const offsetX = (minimapCanvas.width - allShapesBbox.width * minimapScale) / 2;
+            const offsetY = (minimapHeight - allShapesBbox.height * minimapScale) / 2;
+
+            const worldX = (minimapMouseX - offsetX) / minimapScale + allShapesBbox.x;
+            const worldY = (minimapMouseY - offsetY) / minimapScale + allShapesBbox.y;
+            
+            viewOffsetX = canvas.width / 2 - worldX * scale;
+            viewOffsetY = canvas.height / 2 - worldY * scale;
+
+            draw();
+        }
+
+        minimapContainer.addEventListener('mousedown', e => {
+            isPanningMinimap = true;
+            handleMinimapNavigation(e);
+        });
+
+        minimapContainer.addEventListener('mousemove', e => {
+            if (isPanningMinimap) {
+                handleMinimapNavigation(e);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isPanningMinimap = false;
+        });
+        
+        minimapContainer.addEventListener('mouseenter', () => clearTimeout(minimapTimer));
+        minimapContainer.addEventListener('mouseleave', () => requestMinimap());
+
 
         // --- Initialization ---
         async function setupFirestoreListener() {
@@ -1055,3 +1363,16 @@
     </script>
 </body>
 </html>
+", in the most up-to-date document and am asking a query about/based on this code below.
+Instructions to follow:
+  * Don't output/edit the document if the query is Direct/Simple. For example, if the query asks for a simple explanation, output a direct answer.
+  * Make sure to **edit** the document if the query shows the intent of editing the document, in which case output the entire edited document, **not just that section or the edits**.
+    * Don't output the same document/empty document and say that you have edited it.
+    * Don't change unrelated code in the document.
+  * Don't output  and  in your final response.
+  * Any references like "this" or "selected code" refers to the code between  and  tags.
+  * Just acknowledge my request in the introduction.
+  * Make sure to refer to the document as "Canvas" in your response.
+
+(actual user query begins now)
+현재는 사각형만 회전이 돼. 원형, 선도 회전이 되게 
