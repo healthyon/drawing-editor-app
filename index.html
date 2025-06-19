@@ -822,12 +822,24 @@
             setActiveTool('select'); 
             
             try {
+                let firebaseConfig;
                 const firebaseConfigString = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
-                if (firebaseConfigString === '{}' || !firebaseConfigString) {
-                    throw new Error("Firebase config not found in environment.");
+                
+                if (firebaseConfigString !== '{}' && firebaseConfigString) {
+                     firebaseConfig = JSON.parse(firebaseConfigString);
+                } else {
+                    // Fallback for local development if the user provides the config
+                    firebaseConfig = {
+                         apiKey: "AIzaSyCiKvn9Go7_ZOkYNbE-HcyVeJVQ3RZawzY",
+                         authDomain: "diary-8d162.firebaseapp.com",
+                         projectId: "diary-8d162",
+                         storageBucket: "diary-8d162.firebasestorage.app",
+                         messagingSenderId: "126822483970",
+                         appId: "1:126822483970:web:e24300963518f28db9ff1b"
+                    };
+                    console.log("Using fallback Firebase config for local development.");
                 }
                 
-                const firebaseConfig = JSON.parse(firebaseConfigString);
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
