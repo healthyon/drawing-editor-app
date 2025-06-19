@@ -151,7 +151,7 @@
 
         // --- Constants ---
         const MIN_SCALE = 0.1, MAX_SCALE = 10.0;
-        const HANDLE_SIZE = 8, MIN_SHAPE_SIZE = 10, LINE_SELECT_TOLERANCE = 5, PIXELS_PER_CM = 5, ROTATE_HANDLE_OFFSET = 30;
+        const HANDLE_SIZE = 8, MIN_SHAPE_SIZE = 10, LINE_SELECT_TOLERANCE = 5, PIXELS_PER_METER = 500, ROTATE_HANDLE_OFFSET = 30;
 
         // --- Utility & Viewport Functions ---
         function showToast(message) { toast.textContent = message; toast.classList.add('show'); setTimeout(() => { toast.classList.remove('show'); }, 3000); }
@@ -246,18 +246,18 @@
             let content = `<div class="space-y-4"><div><label class="text-sm font-medium">이름</label><input type="text" id="inspector-name" class="inspector-input" value="${selectedShape.name || ''}"></div>`;
             switch(selectedShape.type) {
                 case 'rectangle':
-                    content += `<div><label class="text-sm font-medium">가로 (cm)</label><input type="number" step="0.1" id="inspector-width" class="inspector-input" value="${(selectedShape.width / PIXELS_PER_CM).toFixed(2)}"></div>
-                               <div><label class="text-sm font-medium">세로 (cm)</label><input type="number" step="0.1" id="inspector-height" class="inspector-input" value="${(selectedShape.height / PIXELS_PER_CM).toFixed(2)}"></div>
+                    content += `<div><label class="text-sm font-medium">가로 (m)</label><input type="number" step="0.1" id="inspector-width" class="inspector-input" value="${(selectedShape.width / PIXELS_PER_METER).toFixed(2)}"></div>
+                               <div><label class="text-sm font-medium">세로 (m)</label><input type="number" step="0.1" id="inspector-height" class="inspector-input" value="${(selectedShape.height / PIXELS_PER_METER).toFixed(2)}"></div>
                                <div><label class="text-sm font-medium">회전 (°)</label><input type="number" id="inspector-rotation" class="inspector-input" value="${((selectedShape.rotation || 0) * 180 / Math.PI).toFixed(1)}"></div>`;
                     break;
                 case 'line':
                     const length = Math.hypot(selectedShape.x2 - selectedShape.x1, selectedShape.y2 - selectedShape.y1);
                     const angle = Math.atan2(selectedShape.y2 - selectedShape.y1, selectedShape.x2 - selectedShape.x1) * 180 / Math.PI;
-                    content += `<div><label class="text-sm font-medium">길이 (cm)</label><input type="number" step="0.1" id="inspector-length" class="inspector-input" value="${(length / PIXELS_PER_CM).toFixed(2)}"></div>
+                    content += `<div><label class="text-sm font-medium">길이 (m)</label><input type="number" step="0.1" id="inspector-length" class="inspector-input" value="${(length / PIXELS_PER_METER).toFixed(2)}"></div>
                                <div><label class="text-sm font-medium">회전 (°)</label><input type="number" id="inspector-rotation" class="inspector-input" value="${angle.toFixed(1)}"></div>`;
                     break;
                 case 'circle':
-                     content += `<div><label class="text-sm font-medium">지름 (cm)</label><input type="number" step="0.1" id="inspector-diameter" class="inspector-input" value="${(selectedShape.radius * 2 / PIXELS_PER_CM).toFixed(2)}"></div>`;
+                     content += `<div><label class="text-sm font-medium">지름 (m)</label><input type="number" step="0.1" id="inspector-diameter" class="inspector-input" value="${(selectedShape.radius * 2 / PIXELS_PER_METER).toFixed(2)}"></div>`;
                     break;
             }
             content += `<div><label class="text-sm font-medium">선 두께</label><input type="number" id="inspector-line-width" class="inspector-input" value="${selectedShape.lineWidth || 1}" min="1"></div>
@@ -271,8 +271,8 @@
         function addInspectorListeners() {
             const saveOnChange = () => { if(isAppReady) { draw(); saveState(); } };
             document.getElementById('inspector-name')?.addEventListener('change', e => { if (selectedShape) { selectedShape.name = e.target.value; saveOnChange(); } });
-            document.getElementById('inspector-width')?.addEventListener('change', e => { if (selectedShape) { selectedShape.width = parseFloat(e.target.value) * PIXELS_PER_CM; saveOnChange(); } });
-            document.getElementById('inspector-height')?.addEventListener('change', e => { if (selectedShape) { selectedShape.height = parseFloat(e.target.value) * PIXELS_PER_CM; saveOnChange(); } });
+            document.getElementById('inspector-width')?.addEventListener('change', e => { if (selectedShape) { selectedShape.width = parseFloat(e.target.value) * PIXELS_PER_METER; saveOnChange(); } });
+            document.getElementById('inspector-height')?.addEventListener('change', e => { if (selectedShape) { selectedShape.height = parseFloat(e.target.value) * PIXELS_PER_METER; saveOnChange(); } });
             document.getElementById('inspector-rotation')?.addEventListener('change', e => {
                  if (selectedShape) {
                     const newAngleRad = parseFloat(e.target.value) * Math.PI / 180;
@@ -291,8 +291,8 @@
                     saveOnChange();
                  }
             });
-            document.getElementById('inspector-length')?.addEventListener('change', e => { if (selectedShape) { const newLength = parseFloat(e.target.value) * PIXELS_PER_CM; const angle = Math.atan2(selectedShape.y2 - selectedShape.y1, selectedShape.x2 - selectedShape.x1); selectedShape.x2 = selectedShape.x1 + newLength * Math.cos(angle); selectedShape.y2 = selectedShape.y1 + newLength * Math.sin(angle); saveOnChange(); } });
-            document.getElementById('inspector-diameter')?.addEventListener('change', e => { if (selectedShape) { selectedShape.radius = parseFloat(e.target.value) * PIXELS_PER_CM / 2; saveOnChange(); } });
+            document.getElementById('inspector-length')?.addEventListener('change', e => { if (selectedShape) { const newLength = parseFloat(e.target.value) * PIXELS_PER_METER; const angle = Math.atan2(selectedShape.y2 - selectedShape.y1, selectedShape.x2 - selectedShape.x1); selectedShape.x2 = selectedShape.x1 + newLength * Math.cos(angle); selectedShape.y2 = selectedShape.y1 + newLength * Math.sin(angle); saveOnChange(); } });
+            document.getElementById('inspector-diameter')?.addEventListener('change', e => { if (selectedShape) { selectedShape.radius = parseFloat(e.target.value) * PIXELS_PER_METER / 2; saveOnChange(); } });
             document.getElementById('inspector-line-width')?.addEventListener('change', e => { if (selectedShape) { const newWidth = parseFloat(e.target.value); selectedShape.lineWidth = newWidth; currentStyle.lineWidth = newWidth; saveOnChange(); } });
             document.getElementById('inspector-stroke-color')?.addEventListener('input', e => { if (selectedShape) { selectedShape.strokeColor = e.target.value; currentStyle.strokeColor = e.target.value; saveOnChange(); } });
             document.getElementById('inspector-fill-color')?.addEventListener('input', e => { if (selectedShape) { selectedShape.fillColor = e.target.value; currentStyle.fillColor = e.target.value; saveOnChange(); } });
@@ -352,8 +352,8 @@
             if (showDimensions && shape.id) {
                  const points = getHandlePositions(shape);
                  if(points.tl) {
-                    drawDimensionText(`${(width / PIXELS_PER_CM).toFixed(1)} cm`, (points.tl.x + points.tr.x)/2, (points.tl.y + points.tr.y)/2, rotation);
-                    drawDimensionText(`${(height / PIXELS_PER_CM).toFixed(1)} cm`, (points.tr.x + points.br.x)/2, (points.tr.y + points.br.y)/2, rotation + Math.PI / 2);
+                    drawDimensionText(`${(width / PIXELS_PER_METER).toFixed(2)} m`, (points.tl.x + points.tr.x)/2, (points.tl.y + points.tr.y)/2, rotation);
+                    drawDimensionText(`${(height / PIXELS_PER_METER).toFixed(2)} m`, (points.tr.x + points.br.x)/2, (points.tr.y + points.br.y)/2, rotation + Math.PI / 2);
                  }
             }
         }
@@ -361,7 +361,7 @@
             const { x1, y1, x2, y2, strokeColor, lineWidth } = shape;
             ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
             ctx.strokeStyle = strokeColor; ctx.lineWidth = (lineWidth || 1) / scale; ctx.stroke();
-            if (showDimensions && shape.id) { const length = Math.hypot(x2 - x1, y2 - y1); const angle = Math.atan2(y2 - y1, x2 - x1); drawDimensionText(`${(length / PIXELS_PER_CM).toFixed(1)} cm`, (x1 + x2) / 2, (y1 + y2) / 2, angle); }
+            if (showDimensions && shape.id) { const length = Math.hypot(x2 - x1, y2 - y1); const angle = Math.atan2(y2 - y1, x2 - x1); drawDimensionText(`${(length / PIXELS_PER_METER).toFixed(2)} m`, (x1 + x2) / 2, (y1 + y2) / 2, angle); }
         }
         function drawCircle(shape) {
             const { cx, cy, radius, fillColor, strokeColor, lineWidth, name } = shape;
@@ -369,7 +369,7 @@
             ctx.fillStyle = fillColor; ctx.fill();
             ctx.strokeStyle = strokeColor; ctx.lineWidth = (lineWidth || 1) / scale; ctx.stroke();
             if (name) drawName(name, cx, cy);
-            if (showDimensions && shape.id) { const diameterCm = (radius * 2 / PIXELS_PER_CM).toFixed(1); ctx.beginPath(); ctx.moveTo(cx - radius, cy); ctx.lineTo(cx + radius, cy); ctx.strokeStyle = '#c2410c'; ctx.lineWidth = 1 / scale; ctx.setLineDash([2/scale, 2/scale]); ctx.stroke(); ctx.setLineDash([]); drawDimensionText(`Ø ${diameterCm} cm`, cx, cy); }
+            if (showDimensions && shape.id) { const diameterM = (radius * 2 / PIXELS_PER_METER).toFixed(2); ctx.beginPath(); ctx.moveTo(cx - radius, cy); ctx.lineTo(cx + radius, cy); ctx.strokeStyle = '#c2410c'; ctx.lineWidth = 1 / scale; ctx.setLineDash([2/scale, 2/scale]); ctx.stroke(); ctx.setLineDash([]); drawDimensionText(`Ø ${diameterM} m`, cx, cy); }
         }
         function drawName(name, x, y) { ctx.save(); ctx.fillStyle = '#111827'; ctx.font = `bold ${14 / scale}px "Noto Sans KR"`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(name, x, y); ctx.restore(); }
         function drawDimensionText(text, x, y, angle = 0) {
@@ -616,6 +616,58 @@
             else if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
         });
         window.addEventListener('keyup', e => { if (e.key === 'Shift') isShiftDown = false; });
+        
+        localSaveBtn.addEventListener('click', () => {
+            if (!isAppReady) return;
+            const data = JSON.stringify(shapes, null, 2);
+            const blob = new Blob([data], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'drawing.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('도면이 로컬에 저장되었습니다.');
+        });
+        
+        localLoadBtn.addEventListener('click', () => {
+            if (!isAppReady) {
+                showToast('앱이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
+                return;
+            };
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = event => {
+                    try {
+                        const loadedShapes = JSON.parse(event.target.result);
+                        if (Array.isArray(loadedShapes)) {
+                            shapes = loadedShapes;
+                            // Reset history and save the new state to cloud
+                            history = [];
+                            historyIndex = -1;
+                            saveState(); 
+                            selectShape(null);
+                            draw();
+                            showToast('로컬 파일을 불러와 클라우드에 동기화했습니다.');
+                        } else {
+                            showToast('잘못된 파일 형식입니다.');
+                        }
+                    } catch (err) {
+                        showToast('파일을 불러오는 중 오류가 발생했습니다.');
+                        console.error(err);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        });
+
         deleteShapeBtn.addEventListener('click', () => { 
             if (!isAppReady) return;
             if (selectedShape) { 
