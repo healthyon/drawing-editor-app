@@ -824,34 +824,43 @@
             try {
                 const firebaseConfigString = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
                 if (firebaseConfigString === '{}' || !firebaseConfigString) {
-                    throw new Error("Firebase config is missing from the environment.");
+                    throw new Error("Firebase config not found in environment.");
                 }
+                
                 const firebaseConfig = JSON.parse(firebaseConfigString);
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                onAuthStateChanged(auth, (user) => {
+                onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
                         if (!dataLoaded) {
-                           setupFirestoreListener();
+                           await setupFirestoreListener();
                         }
                     } else {
-                        // User is signed out. Handled by sign-in logic below.
+                        // No user is signed in, attempt to sign in.
+                        const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                        try {
+                            if (token) {
+                                await signInWithCustomToken(auth, token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (signInError) {
+                            console.error("Sign-in failed:", signInError);
+                            isAppReady = true; 
+                            saveStatus.textContent = "인증 실패";
+                            saveStatus.classList.add('text-red-500');
+                            showToast("Firebase 인증에 실패하여 로컬에서만 작업합니다.");
+                        }
                     }
                 });
 
-                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                if (token && !auth.currentUser) {
-                    await signInWithCustomToken(auth, token);
-                } else if (!auth.currentUser) {
-                    await signInAnonymously(auth);
-                }
             } catch (e) {
-                console.error("Firebase initialization or authentication failed:", e);
+                console.error("Firebase initialization failed:", e);
                 isAppReady = true; // Allow local work even if firebase fails
-                saveStatus.textContent = "인증/연결 실패";
+                saveStatus.textContent = "연결 실패";
                 saveStatus.classList.remove('text-green-600', 'text-gray-500');
                 saveStatus.classList.add('text-red-500');
                 showToast("Firebase 연동에 실패했습니다. 로컬에서만 작업이 가능합니다.");
