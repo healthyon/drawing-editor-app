@@ -52,6 +52,7 @@
         <canvas id="drawingCanvas"></canvas>
     </div>
 
+    <!-- Toolbar -->
     <div class="absolute top-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm p-3 rounded-xl shadow-lg">
         <div class="flex items-center justify-between w-full">
             <!-- Left Section: Title and Status -->
@@ -63,6 +64,11 @@
             <!-- Center Section: Tools -->
             <div class="flex-grow flex justify-center items-center space-x-1">
                 <label class="text-sm font-medium text-gray-700">파일:</label>
+                <button id="newDrawingBtn" title="새 도면" class="tool-btn bg-gray-200 hover:bg-gray-300 p-2 rounded-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </button>
                 <button id="localSaveBtn" title="로컬에 저장" class="tool-btn bg-gray-200 hover:bg-gray-300 p-2 rounded-md">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -110,7 +116,8 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Inspector Panel -->
     <div id="inspector" class="absolute top-[80px] right-4 w-64 bg-white/80 backdrop-blur-sm p-4 rounded-xl border z-10 hidden">
         <h3 class="font-bold text-lg mb-4">상세 정보</h3>
         <div id="inspector-content">
@@ -118,14 +125,17 @@
         </div>
     </div>
     
+    <!-- Minimap -->
     <div id="minimap-container" class="absolute bottom-4 right-4 w-48 h-36 bg-white/80 backdrop-blur-sm p-1 rounded-lg border-2 border-blue-300 shadow-lg opacity-0 pointer-events-none z-20">
         <canvas id="minimapCanvas"></canvas>
     </div>
 
+    <!-- Usage Guide -->
     <div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-xs bg-black/40 px-3 py-1.5 rounded-full z-10">
-        <p><strong class="font-semibold">사용법:</strong> 휠(축소/확대) | 휠 클릭(화면 이동) | Ctrl+Z(뒤로가기) | Ctrl+Y(앞으로가기) | Delete(삭제)</p>
+        <p><strong class="font-semibold">사용법:</strong> 휠(축소/확대) | 휠 클릭(화면 이동) | Alt+이동(스냅) | Ctrl+Z(뒤로가기) | Delete(삭제)</p>
     </div>
     
+    <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
     <script type="module">
@@ -141,7 +151,7 @@
         const zoomInBtn = document.getElementById('zoomInBtn'), zoomOutBtn = document.getElementById('zoomOutBtn'), zoomResetBtn = document.getElementById('zoomResetBtn'), zoomLevelDisplay = document.getElementById('zoomLevelDisplay');
         const showDimensionsToggle = document.getElementById('showDimensionsToggle');
         const inspector = document.getElementById('inspector'), inspectorContent = document.getElementById('inspector-content');
-        const printBtn = document.getElementById('printBtn'), localSaveBtn = document.getElementById('localSaveBtn'), localLoadBtn = document.getElementById('localLoadBtn');
+        const printBtn = document.getElementById('printBtn'), localSaveBtn = document.getElementById('localSaveBtn'), localLoadBtn = document.getElementById('localLoadBtn'), newDrawingBtn = document.getElementById('newDrawingBtn');
         const undoBtn = document.getElementById('undoBtn'), redoBtn = document.getElementById('redoBtn');
         const saveStatus = document.getElementById('saveStatus');
         const minimapContainer = document.getElementById('minimap-container');
@@ -149,7 +159,7 @@
 
         // --- State Management ---
         let shapes = [], selectedShapes = [], currentTool = 'select';
-        let isDrawing = false, isDragging = false, isResizing = false, isPanning = false, isRotating = false, isShiftDown = false, isMultiSelecting = false;
+        let isDrawing = false, isDragging = false, isResizing = false, isPanning = false, isRotating = false, isShiftDown = false, isMultiSelecting = false, isAltDown = false;
         let isPanningMinimap = false;
         let resizeHandle = null, startX, startY, endX, endY, lastPanPoint = { x: 0, y: 0 };
         let dragStart = { mouse: {}, shapes: [] };
@@ -162,6 +172,7 @@
         let dataLoaded = false;
         let isAppReady = false; 
         let minimapTimer;
+        let snapLines = [];
 
         // --- Firebase State ---
         let db, auth, userId;
@@ -171,6 +182,7 @@
         // --- Constants ---
         const MIN_SCALE = 0.1, MAX_SCALE = 10.0;
         const HANDLE_SIZE = 8, MIN_SHAPE_SIZE = 10, LINE_SELECT_TOLERANCE = 5, PIXELS_PER_METER = 80, ROTATE_HANDLE_OFFSET = 30;
+        const SNAP_TOLERANCE = 10; // pixels
 
         // --- Utility & Viewport Functions ---
         function showToast(message) { toast.textContent = message; toast.classList.add('show'); setTimeout(() => { toast.classList.remove('show'); }, 3000); }
@@ -353,6 +365,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.translate(viewOffsetX, viewOffsetY);
             ctx.scale(scale, scale);
+
             shapes.forEach(shape => {
                 ctx.save();
                 switch (shape.type) {
@@ -425,6 +438,33 @@
                 ctx.strokeRect(selectionBox.x, selectionBox.y, selectionBox.width, selectionBox.height);
                 ctx.restore();
             }
+
+            // Draw snap lines
+            if (snapLines.length > 0) {
+                ctx.save();
+                ctx.strokeStyle = '#ef4444'; // red-500
+                ctx.lineWidth = 1 / scale;
+                ctx.setLineDash([4 / scale, 4 / scale]);
+                const viewBbox = {
+                    x: -viewOffsetX / scale,
+                    y: -viewOffsetY / scale,
+                    width: canvas.width / scale,
+                    height: canvas.height / scale
+                };
+                snapLines.forEach(line => {
+                    ctx.beginPath();
+                    if (line.type === 'v') {
+                        ctx.moveTo(line.x, viewBbox.y);
+                        ctx.lineTo(line.x, viewBbox.y + viewBbox.height);
+                    } else { // 'h'
+                        ctx.moveTo(viewBbox.x, line.y);
+                        ctx.lineTo(viewBbox.x + viewBbox.width, line.y);
+                    }
+                    ctx.stroke();
+                });
+                ctx.restore();
+            }
+
             ctx.restore();
 
             if (!minimapContainer.classList.contains('hidden')) {
@@ -639,6 +679,42 @@
         }
 
         // --- Collision, Move, Resize, Rotate, Cursor ---
+        function getSnapPoints(shape, offsetX = 0, offsetY = 0) {
+            const points = [];
+            let centerX, centerY;
+
+            if (shape.type === 'rectangle') {
+                centerX = shape.x + shape.width / 2;
+                centerY = shape.y + shape.height / 2;
+                const positions = getHandlePositions(shape);
+                points.push({ x: positions.tl.x, y: positions.tl.y });
+                points.push({ x: positions.tr.x, y: positions.tr.y });
+                points.push({ x: positions.bl.x, y: positions.bl.y });
+                points.push({ x: positions.br.x, y: positions.br.y });
+                points.push({ x: (positions.tl.x + positions.tr.x) / 2, y: (positions.tl.y + positions.tr.y) / 2 });
+                points.push({ x: (positions.bl.x + positions.br.x) / 2, y: (positions.bl.y + positions.br.y) / 2 });
+                points.push({ x: (positions.tl.x + positions.bl.x) / 2, y: (positions.tl.y + positions.bl.y) / 2 });
+                points.push({ x: (positions.tr.x + positions.br.x) / 2, y: (positions.tr.y + positions.br.y) / 2 });
+            } else if (shape.type === 'circle') {
+                centerX = shape.cx;
+                centerY = shape.cy;
+                const positions = getHandlePositions(shape);
+                points.push({ x: positions.n.x, y: positions.n.y });
+                points.push({ x: positions.s.x, y: positions.s.y });
+                points.push({ x: positions.w.x, y: positions.w.y });
+                points.push({ x: positions.e.x, y: positions.e.y });
+            } else if (shape.type === 'line') {
+                centerX = (shape.x1 + shape.x2) / 2;
+                centerY = (shape.y1 + shape.y2) / 2;
+                points.push({ x: shape.x1, y: shape.y1 });
+                points.push({ x: shape.x2, y: shape.y2 });
+            }
+
+            points.push({ x: centerX, y: centerY });
+            
+            return points.map(p => ({ x: p.x + offsetX, y: p.y + offsetY }));
+        }
+
         function isShapeInBox(shape, box) {
             const shapeBbox = calculateBoundingBox([shape]);
             if (!shapeBbox) return false;
@@ -815,10 +891,8 @@
             
             let angle = Math.atan2(my - centerY, mx - centerX);
             
-            if (selectedShape.type === 'rectangle') { 
-                angle += Math.PI / 2; // Adjust for rectangle handle position
-            } else if (selectedShape.type === 'circle') {
-                 angle += Math.PI / 2; // Adjust for circle handle position
+            if (selectedShape.type === 'rectangle' || selectedShape.type === 'circle') { 
+                angle += Math.PI / 2; // Adjust for handle position
             }
 
             if (isShiftDown) { angle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4); }
@@ -868,10 +942,9 @@
                 } else if(shape.type === 'line'){
                     points = [handlePoints.start, handlePoints.end];
                 } else if(shape.type === 'circle'){
-                     const { cx, cy, radiusX, radiusY, rotation = 0 } = shape;
+                     const { cx, cy, radius, radiusX, radiusY, rotation = 0 } = shape;
                      const rX = radiusX ?? radius;
                      const rY = radiusY ?? radius;
-                     // Bounding box of a rotated ellipse is more complex, for simplicity, we use an approximation
                      const cos = Math.abs(Math.cos(rotation));
                      const sin = Math.abs(Math.sin(rotation));
                      const w = rX * 2;
@@ -896,8 +969,25 @@
         }
 
         // --- Event Handlers & Logic ---
+        function clearCanvas() {
+            if (!isAppReady) {
+                showToast('앱이 아직 준비되지 않았습니다.');
+                return;
+            }
+            if (shapes.length > 0) {
+                shapes = [];
+                setSelectedShapes([]);
+                saveState(); // Crucial for making the clear action undoable
+                draw();
+                showToast('새로운 도면을 시작합니다. (Ctrl+Z로 되돌리기 가능)');
+            } else {
+                showToast('이미 비어있는 도면입니다.');
+            }
+        }
+        
         window.addEventListener('keydown', e => { 
             if (e.key === 'Shift') isShiftDown = true;
+            if (e.key === 'Alt') { isAltDown = true; e.preventDefault(); }
             if (!isAppReady) return;
             if (document.activeElement.tagName.toLowerCase() === 'input') return;
             if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapes.length > 0) {
@@ -911,8 +1001,13 @@
             } else if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); } 
             else if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
         });
-        window.addEventListener('keyup', e => { if (e.key === 'Shift') isShiftDown = false; });
+        window.addEventListener('keyup', e => { 
+            if (e.key === 'Shift') isShiftDown = false; 
+            if (e.key === 'Alt') isAltDown = false;
+        });
         
+        newDrawingBtn.addEventListener('click', clearCanvas);
+
         localSaveBtn.addEventListener('click', () => {
             if (!isAppReady) return;
             const data = JSON.stringify(shapes, null, 2);
@@ -944,7 +1039,6 @@
                         const loadedShapes = JSON.parse(event.target.result);
                         if (Array.isArray(loadedShapes)) {
                             shapes = loadedShapes;
-                            // Reset history and save the new state to cloud
                             history = [];
                             historyIndex = -1;
                             saveState(); 
@@ -1100,20 +1194,66 @@
                 } else if (isDragging) {
                     const dx = (screenPos.x - startX) / scale;
                     const dy = (screenPos.y - startY) / scale;
+                    let finalDx = dx;
+                    let finalDy = dy;
+                    snapLines = [];
+
+                    if (isAltDown) {
+                        const tolerance = SNAP_TOLERANCE / scale;
+                        let bestSnapX = { dist: tolerance, offset: 0 };
+                        let bestSnapY = { dist: tolerance, offset: 0 };
+                        const otherShapes = shapes.filter(s => !selectedShapes.find(sel => sel.id === s.id));
+                        
+                        selectedShapes.forEach((movingShape, index) => {
+                            const startShape = dragStart.shapes[index];
+                            const movingSnapPoints = getSnapPoints(startShape, dx, dy);
+
+                            otherShapes.forEach(staticShape => {
+                                const staticSnapPoints = getSnapPoints(staticShape);
+                                movingSnapPoints.forEach(p1 => {
+                                    staticSnapPoints.forEach(p2 => {
+                                        const diffX = p2.x - p1.x;
+                                        const diffY = p2.y - p1.y;
+
+                                        if (Math.abs(diffX) < bestSnapX.dist) {
+                                            bestSnapX.dist = Math.abs(diffX);
+                                            bestSnapX.offset = diffX;
+                                            bestSnapX.line = { type: 'v', x: p2.x };
+                                        }
+                                        if (Math.abs(diffY) < bestSnapY.dist) {
+                                            bestSnapY.dist = Math.abs(diffY);
+                                            bestSnapY.offset = diffY;
+                                            bestSnapY.line = { type: 'h', y: p2.y };
+                                        }
+                                    });
+                                });
+                            });
+                        });
+
+                        if (Math.abs(bestSnapX.offset) > 0) {
+                            finalDx += bestSnapX.offset;
+                            if (!snapLines.some(l => l.type === 'v' && l.x === bestSnapX.line.x)) snapLines.push(bestSnapX.line);
+                        }
+                        if (Math.abs(bestSnapY.offset) > 0) {
+                            finalDy += bestSnapY.offset;
+                            if (!snapLines.some(l => l.type === 'h' && l.y === bestSnapY.line.y)) snapLines.push(bestSnapY.line);
+                        }
+                    }
+
                     const startShapesMap = new Map(dragStart.shapes.map(s => [s.id, s]));
                     selectedShapes.forEach(shape => {
                         const startShape = startShapesMap.get(shape.id);
                         if (!startShape) return;
-
                         if (shape.type === 'line') {
-                            shape.x1 = startShape.x1 + dx; shape.y1 = startShape.y1 + dy;
-                            shape.x2 = startShape.x2 + dx; shape.y2 = startShape.y2 + dy;
+                            shape.x1 = startShape.x1 + finalDx; shape.y1 = startShape.y1 + finalDy;
+                            shape.x2 = startShape.x2 + finalDx; shape.y2 = startShape.y2 + finalDy;
                         } else if (shape.type === 'circle') {
-                             shape.cx = startShape.cx + dx; shape.cy = startShape.cy + dy;
+                             shape.cx = startShape.cx + finalDx; shape.cy = startShape.cy + finalDy;
                         } else {
-                            shape.x = startShape.x + dx; shape.y = startShape.y + dy;
+                            shape.x = startShape.x + finalDx; shape.y = startShape.y + finalDy;
                         }
                     });
+
                 } else if (isMultiSelecting) {
                     selectionBox.width = screenPos.x - selectionBox.x;
                     selectionBox.height = screenPos.y - selectionBox.y;
@@ -1126,6 +1266,7 @@
 
         canvas.addEventListener('mouseup', (e) => {
             if (!isAppReady) return;
+            snapLines = [];
             let shapeDrawn = false;
             let selectionChanged = false;
             const actionOccurred = isDragging || isResizing || isRotating;
@@ -1349,7 +1490,7 @@
                         projectId: "leondk25ai",
                         storageBucket: "leondk25ai.appspot.com",
                         messagingSenderId: "903396777598",
-                        appId: "1:903396777598:web:bfe98832772bf48bf3022f"
+                        appId: "1:903396777598:web:bfe98832772bf3022f"
                     };
                     console.warn("Using fallback Firebase config. IMPORTANT: For this to work, you MUST enable Anonymous Authentication in your Firebase project console (Project: leondk25ai).");
                 }
